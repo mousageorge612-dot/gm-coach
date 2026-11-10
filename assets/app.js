@@ -153,16 +153,42 @@
     if ((m = r.match(/(\d+)/))) return +m[1] > 10 ? +m[1] : +m[1] * 60;
     return 0;
   }
-  var tmr = null;
+  var tmr = null, actx = null, beeps = [];
+  /* Sounds are scheduled on the audio clock when the timer starts, so they still play if the screen locks. */
+  function audio() {
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) { actx = null; }
+    return actx;
+  }
+  function tone(at, freq, dur, vol) {
+    var c = actx, o = c.createOscillator(), g = c.createGain();
+    o.type = 'sine'; o.frequency.value = freq; o.connect(g); g.connect(c.destination);
+    g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.start(at); o.stop(at + dur + 0.05); beeps.push(o);
+  }
+  function cancelBeeps() { beeps.forEach(function (o) { try { o.stop(); } catch (e) {} }); beeps = []; }
+  function scheduleBeeps(s) {
+    cancelBeeps(); if (!soundOn() || !audio()) return;
+    var t0 = actx.currentTime;
+    [3, 2, 1].forEach(function (k) { if (s > k) tone(t0 + s - k, 660, 0.12, 0.25); });
+    [0, 0.35, 0.7].forEach(function (d) { tone(t0 + s + d, 988, 0.28, 0.6); });
+  }
+  function soundOn() { return localStorage.getItem('gmc_sound') !== '0'; }
+  function notifyDone() {
+    if (!('Notification' in window) || Notification.permission !== 'granted' || document.visibilityState === 'visible') return;
+    navigator.serviceWorker && navigator.serviceWorker.ready.then(function (r) {
+      r.showNotification('خلصت الراحة 💪', { body: 'يلا عالجولة الجاية', icon: 'assets/img/icon-192.png', badge: 'assets/img/icon-192.png', tag: 'gmc-rest', renotify: true, vibrate: [300, 150, 300] });
+    }).catch(function () {});
+  }
   function startTimer(s) {
-    clearInterval(tmr); var end = Date.now() + s * 1000, box = $('#timer');
+    clearInterval(tmr); var end = Date.now() + s * 1000, box = $('#timer'), done = false;
+    scheduleBeeps(s);
     function tick() {
       var left = Math.max(0, Math.round((end - Date.now()) / 1000));
       $('#timer-s').textContent = Math.floor(left / 60) + ':' + G.pad(left % 60);
-      if (!left) { clearInterval(tmr); if (navigator.vibrate) navigator.vibrate([300, 150, 300]); setTimeout(function () { box.hidden = true; }, 1500); }
+      if (!left && !done) { done = true; clearInterval(tmr); if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]); notifyDone(); setTimeout(function () { box.hidden = true; }, 2500); }
     }
     box.hidden = false; tick(); tmr = setInterval(tick, 500);
-    $('#timer-x').onclick = function () { clearInterval(tmr); box.hidden = true; };
+    $('#timer-x').onclick = function () { clearInterval(tmr); cancelBeeps(); box.hidden = true; };
   }
   function saveSets(id) {
     var box = $('[data-sets="' + id + '"]'); if (!box) return;
@@ -261,6 +287,10 @@
       '<div style="margin-top:10px;display:grid;gap:6px">' + (m.package ? '<div>الباقة: <b>' + esc(PKG[m.package] || m.package) + '</b></div>' : '') +
       (m.start_date ? '<div>البداية: <b>' + esc(m.start_date) + '</b></div>' : '') + (m.end_date ? '<div>الانتهاء: <b>' + esc(m.end_date) + '</b>' + (d !== null && d >= 0 ? ' <span class="muted">(باقي ' + d + ' يوم)</span>' : '') + '</div>' : '') + '</div></div>' +
       '<a class="btn gold block" style="margin-bottom:10px" target="_blank" rel="noopener" href="' + waLink('مرحبا كوتش جورج، أنا ' + m.name) + '">راسل الكوتش على واتساب</a>' +
+      '<div class="card"><div class="h2" style="font-size:16px">مؤقت الراحة</div>' +
+      '<div class="row"><span>صوت لما تخلص الراحة</span><button class="btn sm' + (soundOn() ? ' gold' : '') + '" id="snd" style="flex:0 0 auto">' + (soundOn() ? 'شغّال' : 'مطفى') + '</button></div>' +
+      ('Notification' in window ? '<div class="row" style="margin-top:8px"><span>إشعار إذا كنت برّا التطبيق</span><button class="btn sm' + (Notification.permission === 'granted' ? ' gold' : '') + '" id="ntf" style="flex:0 0 auto">' + (Notification.permission === 'granted' ? 'مفعّل' : Notification.permission === 'denied' ? 'ممنوع' : 'فعّل') + '</button></div>' : '') +
+      '</div>' +
       '<button class="btn block" style="margin-bottom:10px" id="pw">تغيير كلمة المرور</button>' +
       '<button class="btn block" style="margin-bottom:10px" id="rf">تحديث الخطة</button>' +
       '<button class="btn block danger" id="lo">تسجيل خروج</button>' +
@@ -283,6 +313,15 @@
     $$('[data-ck]').forEach(function (b) { b.onclick = function () { var t = G.today(), c = D.checkins[t] = D.checkins[t] || {}; c[b.getAttribute('data-ck')] = b.getAttribute('data-v'); $$('[data-ck="' + b.getAttribute('data-ck') + '"]').forEach(function (x) { x.classList.toggle('on', x === b); }); }; });
     var sv = $('#ck-save'); if (sv) sv.onclick = function () { var t = G.today(), c = D.checkins[t] = D.checkins[t] || {}; c.weight = $('#ck-w').value.trim(); c.waist = $('#ck-waist').value.trim(); c.note = $('#ck-note').value.trim(); saveCheckin(t).then(render); };
     var lo = $('#lo'); if (lo) lo.onclick = logout;
+    var snd = $('#snd'); if (snd) snd.onclick = function () {
+      try { localStorage.setItem('gmc_sound', soundOn() ? '0' : '1'); } catch (e) {}
+      if (soundOn() && audio()) { cancelBeeps(); tone(actx.currentTime + 0.05, 988, 0.28, 0.6); }
+      render();
+    };
+    var ntf = $('#ntf'); if (ntf) ntf.onclick = function () {
+      if (Notification.permission === 'denied') return G.toast('الإشعارات ممنوعة من إعدادات المتصفح، فعّلها من هناك');
+      Notification.requestPermission().then(function (p) { G.toast(p === 'granted' ? 'تفعّلت الإشعارات ✓' : 'ما تفعّلت'); render(); });
+    };
     var rf = $('#rf'); if (rf) rf.onclick = function () { refresh().then(function () { G.toast('تم التحديث'); }); };
     var pw = $('#pw'); if (pw) pw.onclick = function () {
       G.sheet('<div class="h2">كلمة مرور جديدة</div><input class="input" id="np" type="password" dir="ltr" autocomplete="new-password" placeholder="6 أحرف أو أكثر"><button class="btn gold block" style="margin-top:10px" id="npb">حفظ</button>', function (b) {

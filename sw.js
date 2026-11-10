@@ -1,6 +1,6 @@
 /* GM Coach service worker: app shell network-first, fonts/images cache-first, API never cached. */
-var V = 'gmc-v1', IMG = 'gmc-img-v1';
-var SHELL = ['./', 'index.html', 'assets/styles.css?v=1', 'assets/core.js?v=1', 'assets/app.js?v=1', 'assets/img/logo.png', 'assets/img/icon-192.png',
+var V = 'gmc-v2', IMG = 'gmc-img-v1';
+var SHELL = ['./', 'index.html', 'assets/styles.css?v=1', 'assets/core.js?v=1', 'assets/app.js?v=2', 'assets/img/logo.png', 'assets/img/icon-192.png',
   'assets/fonts/cairo-arabic-400-normal.woff2', 'assets/fonts/cairo-arabic-700-normal.woff2', 'assets/fonts/cairo-arabic-900-normal.woff2', 'assets/fonts/sf-sports-night.woff2'];
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(V).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });
 self.addEventListener('activate', function (e) {
@@ -16,4 +16,11 @@ self.addEventListener('fetch', function (e) {
   if (u.origin !== location.origin || u.pathname.indexOf('/admin') === 0) return;
   e.respondWith(fetch(r).then(function (res) { var cp = res.clone(); caches.open(V).then(function (c) { c.put(r, cp); }); return res; })
     .catch(function () { return caches.match(r).then(function (hit) { return hit || caches.match('index.html'); }); }));
+});
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (cs) {
+    for (var i = 0; i < cs.length; i++) if (cs[i].url.indexOf(self.registration.scope) === 0 && 'focus' in cs[i]) return cs[i].focus();
+    return self.clients.openWindow('./');
+  }));
 });
