@@ -18,6 +18,7 @@
     D = loadCache();
     if (D) render(); else $('#app').innerHTML = '<div class="spinner"></div>';
     refresh();
+    pushSub(false);
   }
 
   function refresh() {
@@ -179,6 +180,21 @@
       r.showNotification('خلصت الراحة 💪', { body: 'يلا عالجولة الجاية', icon: 'assets/img/icon-192.png', badge: 'assets/img/icon-192.png', tag: 'gmc-rest', renotify: true, vibrate: [300, 150, 300] });
     }).catch(function () {});
   }
+  function b64u(k) { var p = '='.repeat((4 - k.length % 4) % 4), r = atob((k + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) a[i] = r.charCodeAt(i); return a; }
+  function pushSub(test) {
+    if (!('PushManager' in window) || !('Notification' in window) || !navigator.serviceWorker || Notification.permission !== 'granted' || !S.a) return Promise.resolve(false);
+    return Promise.all([navigator.serviceWorker.ready, S.api('/functions/v1/coach-push')]).then(function (r) {
+      var reg = r[0], key = r[1] && r[1].publicKey; if (!key) return false;
+      return reg.pushManager.getSubscription().then(function (sub) {
+        if (sub && sub.options && sub.options.applicationServerKey && btoa(String.fromCharCode.apply(null, new Uint8Array(sub.options.applicationServerKey))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') !== key) return sub.unsubscribe().then(function () { return null; });
+        return sub;
+      }).then(function (sub) { return sub || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(key) }); })
+        .then(function (sub) {
+          var j = sub.toJSON();
+          return S.upsert('coach_push_subs', { endpoint: j.endpoint, client_id: S.a.uid, p256dh: j.keys.p256dh, auth: j.keys.auth, ua: navigator.userAgent.slice(0, 200) }, 'endpoint');
+        }).then(function () { return test ? S.api('/functions/v1/coach-push', { method: 'POST', body: { kind: 'test' } }) : null; }).then(function () { return true; });
+    }).catch(function () { return false; });
+  }
   function startTimer(s) {
     clearInterval(tmr); var end = Date.now() + s * 1000, box = $('#timer'), done = false;
     scheduleBeeps(s);
@@ -289,7 +305,7 @@
       '<a class="btn gold block" style="margin-bottom:10px" target="_blank" rel="noopener" href="' + waLink('مرحبا كوتش جورج، أنا ' + m.name) + '">راسل الكوتش على واتساب</a>' +
       '<div class="card"><div class="h2" style="font-size:16px">مؤقت الراحة</div>' +
       '<div class="row"><span>صوت لما تخلص الراحة</span><button class="btn sm' + (soundOn() ? ' gold' : '') + '" id="snd" style="flex:0 0 auto">' + (soundOn() ? 'شغّال' : 'مطفى') + '</button></div>' +
-      ('Notification' in window ? '<div class="row" style="margin-top:8px"><span>إشعار إذا كنت برّا التطبيق</span><button class="btn sm' + (Notification.permission === 'granted' ? ' gold' : '') + '" id="ntf" style="flex:0 0 auto">' + (Notification.permission === 'granted' ? 'مفعّل' : Notification.permission === 'denied' ? 'ممنوع' : 'فعّل') + '</button></div>' : '') +
+      ('Notification' in window ? '<div class="row" style="margin-top:8px"><span>الإشعارات: خلص الراحة + تذكير التمرين 7 الصبح والتقرير 11 بالليل</span><button class="btn sm' + (Notification.permission === 'granted' ? ' gold' : '') + '" id="ntf" style="flex:0 0 auto">' + (Notification.permission === 'granted' ? 'مفعّل' : Notification.permission === 'denied' ? 'ممنوع' : 'فعّل') + '</button></div>' : '') +
       '</div>' +
       '<button class="btn block" style="margin-bottom:10px" id="pw">تغيير كلمة المرور</button>' +
       '<button class="btn block" style="margin-bottom:10px" id="rf">تحديث الخطة</button>' +
@@ -320,7 +336,7 @@
     };
     var ntf = $('#ntf'); if (ntf) ntf.onclick = function () {
       if (Notification.permission === 'denied') return G.toast('الإشعارات ممنوعة من إعدادات المتصفح، فعّلها من هناك');
-      Notification.requestPermission().then(function (p) { G.toast(p === 'granted' ? 'تفعّلت الإشعارات ✓' : 'ما تفعّلت'); render(); });
+      Notification.requestPermission().then(function (p) { G.toast(p === 'granted' ? 'تفعّلت الإشعارات ✓' : 'ما تفعّلت'); render(); if (p === 'granted') pushSub(true); });
     };
     var rf = $('#rf'); if (rf) rf.onclick = function () { refresh().then(function () { G.toast('تم التحديث'); }); };
     var pw = $('#pw'); if (pw) pw.onclick = function () {
