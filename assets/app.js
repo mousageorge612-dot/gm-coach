@@ -95,20 +95,32 @@
 
   /* ---------- training ---------- */
   function days() { return (D.training && D.training.data && D.training.data.days) || []; }
+  // Rotation mode (data.rotation = {weekdays:[1,2,4], start:'YYYY-MM-DD'}): the days cycle over the
+  // training weekdays, so a 4-day split on 3 days a week carries the 4th day into the next week.
+  function rotation() { var r = D.training && D.training.data && D.training.data.rotation; return r && r.start && (r.weekdays || []).length ? r : null; }
+  function sessionsBefore(r, day) {
+    var n = 0, d = r.start;
+    for (var k = 0; k < 4000 && d < day; k++) { if (r.weekdays.indexOf(G.parseD(d).getDay()) >= 0) n++; d = G.addDays(d, 1); }
+    return n;
+  }
+  function nextIdx() { var r = rotation(), t = G.today(); if (!r || t < r.start) return r ? 0 : -1; return sessionsBefore(r, G.addDays(t, 1)) % days().length; }
   function todayIdx() {
-    var wd = new Date().getDay(), ds = days();
+    var wd = new Date().getDay(), ds = days(), r = rotation();
+    if (r) { var t = G.today(); return (t >= r.start && r.weekdays.indexOf(wd) >= 0) ? sessionsBefore(r, t) % ds.length : -1; }
     for (var i = 0; i < ds.length; i++) if ((ds[i].weekdays || []).indexOf(wd) >= 0) return i;
     return -1;
   }
   function trainView() {
     var ds = days();
     if (!ds.length) return '<div class="empty">خطتك التدريبية رح تنزل هون قريباً.</div>';
-    var ti = todayIdx(); if (dayIdx === null) dayIdx = ti >= 0 ? ti : 0;
+    var ti = todayIdx(), rot = rotation(), ni = rot && ti < 0 ? nextIdx() : -1;
+    if (dayIdx === null) dayIdx = ti >= 0 ? ti : (ni >= 0 ? ni : 0);
     var h = '<div class="chips">' + ds.map(function (d, i) {
-      var wd = (d.weekdays || []).map(function (w) { return G.WD[w]; }).join(' / ');
-      return '<button class="chip' + (i === dayIdx ? ' on' : '') + '" data-day="' + i + '">' + esc(d.title || ('اليوم ' + (i + 1))) + (wd ? '<small>' + esc(wd) + (i === ti ? ' • اليوم' : '') + '</small>' : '') + '</button>';
+      var wd = rot ? (i === ti ? 'تمرين اليوم' : i === ni ? 'التمرين الجاي' : 'تمرين ' + (i + 1)) : (d.weekdays || []).map(function (w) { return G.WD[w]; }).join(' / ');
+      return '<button class="chip' + (i === dayIdx ? ' on' : '') + '" data-day="' + i + '">' + esc(d.title || ('اليوم ' + (i + 1))) + (wd ? '<small>' + esc(wd) + (i === ti && !rot ? ' • اليوم' : '') + '</small>' : '') + '</button>';
     }).join('') + '</div>';
-    if (ti < 0 && dayIdx === 0 && !trainView._seen) h += '<div class="card" style="text-align:center"><b>اليوم يوم راحة</b><p class="muted" style="margin:4px 0 0">ارتاح، اشرب مي، ونام منيح. فيك تشوف أيام التمرين من فوق.</p></div>';
+    if (rot && ti < 0 && dayIdx === ni && !trainView._seen) h += '<div class="card" style="text-align:center"><b>اليوم يوم راحة</b><p class="muted" style="margin:4px 0 0">تمرينك الجاي: ' + esc(ds[ni].title || '') + ' (' + rot.weekdays.map(function (w) { return G.WD[w]; }).join(' / ') + ')</p></div>';
+    else if (!rot && ti < 0 && dayIdx === 0 && !trainView._seen) h += '<div class="card" style="text-align:center"><b>اليوم يوم راحة</b><p class="muted" style="margin:4px 0 0">ارتاح، اشرب مي، ونام منيح. فيك تشوف أيام التمرين من فوق.</p></div>';
     var d = ds[dayIdx];
     h += '<div class="dayhead">' + (d.title_en ? '<div class="en">' + esc(d.title_en) + '</div>' : '') + '<div class="h1">' + esc(d.title || '') + '</div>' +
       (d.notes ? '<div class="muted" style="margin-top:4px;font-size:13.5px">' + esc(d.notes) + '</div>' : '') + '</div>';

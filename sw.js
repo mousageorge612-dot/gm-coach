@@ -1,6 +1,6 @@
 /* GM Coach service worker: app shell network-first, fonts/images cache-first, API never cached. */
-var V = 'gmc-v4', IMG = 'gmc-img-v1';
-var SHELL = ['./', 'index.html', 'assets/styles.css?v=1', 'assets/core.js?v=1', 'assets/app.js?v=3', 'assets/img/logo.png', 'assets/img/icon-192.png',
+var V = 'gmc-v5', IMG = 'gmc-img-v1';
+var SHELL = ['./', 'index.html', 'assets/styles.css?v=1', 'assets/core.js?v=1', 'assets/app.js?v=4', 'assets/img/logo.png', 'assets/img/icon-192.png',
   'assets/fonts/cairo-arabic-400-normal.woff2', 'assets/fonts/cairo-arabic-700-normal.woff2', 'assets/fonts/cairo-arabic-900-normal.woff2', 'assets/fonts/sf-sports-night.woff2'];
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(V).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });
 self.addEventListener('activate', function (e) {
