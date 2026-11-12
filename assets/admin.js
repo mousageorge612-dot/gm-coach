@@ -70,6 +70,9 @@
     if (c.water) { n++; s += +c.water >= 2 ? 1 : .4; }
     return n ? Math.round(s / n * 100) : 0;
   }
+  var CF = 'all';
+  function isPriv(c) { return /^apex/.test(c.package || ''); }
+  function isFree(c) { return !!c.is_free || c.package === 'free'; }
   function clientsPage() {
     loading('clients');
     var since = G.addDays(G.today(), -13);
@@ -86,7 +89,7 @@
         var adh = Math.round(days7 / 7 * (days7 ? sc / days7 : 0)), left = c.end_date ? G.diffDays(t, c.end_date) : null;
         var gap = lastDay ? G.diffDays(lastDay, t) : 99, lvl = gap >= 3 ? 'alert' : gap >= 2 || (left !== null && left <= 5) ? 'warn' : '';
         if (left !== null && left <= 7) soon++; if (gap >= 2) quiet++; sum += adh;
-        return { c: c, html: '<a class="cl ' + lvl + '" href="#client/' + c.user_id + '"><div><div class="nm">' + esc(c.name) + '</div><div class="sub">' + esc(PKG[c.package] || c.package || '') +
+        return { c: c, html: '<a class="cl ' + lvl + '" href="#client/' + c.user_id + '"><div><div class="nm">' + esc(c.name) + ' <span class="tg ' + (isPriv(c) ? 'pv' : 'on') + '">' + (isPriv(c) ? 'برايفت' : 'أونلاين') + '</span><span class="tg ' + (isFree(c) ? 'fr' : 'pd') + '">' + (isFree(c) ? 'مجاني' : 'مدفوع') + '</span></div><div class="sub">' + esc(PKG[c.package] || c.package || '') +
           (left !== null ? ' · ' + (left < 0 ? '<span class="red">منتهي</span>' : 'باقي ' + left + ' يوم') : '') + ' · ' + (lastDay ? 'آخر تشيك ' + (gap === 0 ? 'اليوم' : 'من ' + gap + ' يوم') : 'ما في تشيكات') + '</div><div class="dots">' + dots + '</div></div>' +
           '<div class="sc ' + (adh >= 75 ? 'green' : adh >= 50 ? 'gold' : 'red') + '">' + adh + '%<small>التزام 7 أيام</small></div></a>' };
       });
@@ -94,8 +97,17 @@
       $('#main').innerHTML = '<div class="kpis"><div class="kpi"><b>' + act.length + '</b><span>مشترك فعّال</span></div><div class="kpi"><b>' + (act.length ? Math.round(sum / act.length) : 0) + '%</b><span>متوسط الالتزام</span></div>' +
         '<div class="kpi"><b class="gold">' + soon + '</b><span>بينتهي خلال 7 أيام</span></div><div class="kpi"><b class="red">' + quiet + '</b><span>غايب يومين أو أكتر</span></div></div>' +
         '<div class="row" style="margin-bottom:12px"><button class="btn gold" id="add" style="flex:none">+ مشترك جديد</button><span></span></div>' +
-        '<div class="list">' + (rows.length ? rows.map(function (x) { return x.html; }).join('') : '<div class="empty">ما في مشتركين لسا. ضيف أول مشترك.</div>') + '</div>' +
+        '<div class="chips" id="cfil"></div><div class="list" id="clist"></div>' +
         (inactive.length ? '<h3 class="muted" style="margin-top:20px">غير فعّالين</h3><div class="list">' + inactive.map(function (c) { return '<a class="cl" href="#client/' + c.user_id + '"><div class="nm muted">' + esc(c.name) + '</div></a>'; }).join('') + '</div>' : '');
+      var FIL = [['all', 'الكل', function () { return true; }], ['priv', 'برايفت', isPriv], ['online', 'أونلاين', function (c) { return !isPriv(c); }], ['paid', 'مدفوع', function (c) { return !isFree(c); }], ['free', 'مجاني', isFree]];
+      function draw() {
+        var cur = FIL.filter(function (f) { return f[0] === CF; })[0] || FIL[0];
+        $('#cfil').innerHTML = FIL.map(function (f) { return '<button class="chip' + (f[0] === cur[0] ? ' on' : '') + '" data-f="' + f[0] + '">' + f[1] + ' (' + rows.filter(function (x) { return f[2](x.c); }).length + ')</button>'; }).join('');
+        var vis = rows.filter(function (x) { return cur[2](x.c); });
+        $('#clist').innerHTML = vis.length ? vis.map(function (x) { return x.html; }).join('') : '<div class="empty">' + (rows.length ? 'ما في مشتركين بهالتصنيف.' : 'ما في مشتركين لسا. ضيف أول مشترك.') + '</div>';
+        [].forEach.call($('#cfil').querySelectorAll('button'), function (b) { b.onclick = function () { CF = b.getAttribute('data-f'); draw(); }; });
+      }
+      draw();
       $('#add').onclick = function () { clientForm(null); };
     }).catch(fail);
   }
@@ -112,6 +124,7 @@
       '<label class="field"><span>الانتهاء</span><input class="input" type="date" name="end_date" value="' + esc(c.end_date || '') + '"></label></div>' +
       '<div class="grid2"><label class="field"><span>واتساب (مع رمز الدولة)</span><input class="input" name="phone" dir="ltr" inputmode="tel" placeholder="9639..." value="' + esc(c.phone || '') + '"></label>' +
       '<label class="field"><span>الهدف</span><input class="input" name="goal" value="' + esc(c.goal || '') + '"></label></div>' +
+      '<label class="field"><span><input type="checkbox" name="is_free"' + (c.is_free ? ' checked' : '') + '> مشترك مجاني (ما بيدفع)</span></label>' +
       (isNew ? '' : '<label class="field"><span><input type="checkbox" name="active"' + (c.active ? ' checked' : '') + '> فعّال</span></label>') +
       '<button class="btn gold block">' + (isNew ? 'إنشاء الحساب' : 'حفظ') + '</button></form>', function (b) {
       var f = $('#cf', b); f.gender.value = c.gender || 'male'; f.package.value = c.package || 'm3';
@@ -120,9 +133,9 @@
       f.onsubmit = function (e) {
         e.preventDefault(); var btn = f.querySelector('button'); btn.disabled = true;
         var v = { name: f.name.value.trim(), gender: f.gender.value, package: f.package.value, start_date: f.start_date.value || null, end_date: f.end_date.value || null, phone: f.phone.value.replace(/\D/g, '') || null, goal: f.goal.value.trim() || null };
-        var p;
-        if (isNew) { v.action = 'create_client'; v.username = f.username.value.trim().toLowerCase(); v.password = f.password.value; p = S.fn('coach-admin', v).then(function (r) { creds(v, r.user_id, v.password, r.existed); }); }
-        else { v.active = f.active.checked; p = S.rest('coach_clients', 'user_id=eq.' + c.user_id, { method: 'PATCH', body: v }).then(function () { G.closeSheet(); route(); }); }
+        var p, fr = f.is_free.checked;
+        if (isNew) { v.action = 'create_client'; v.username = f.username.value.trim().toLowerCase(); v.password = f.password.value; p = S.fn('coach-admin', v).then(function (r) { var done = function () { creds(v, r.user_id, v.password, r.existed); }; return fr ? S.rest('coach_clients', 'user_id=eq.' + r.user_id, { method: 'PATCH', body: { is_free: true } }).then(done, done) : done(); }); }
+        else { v.active = f.active.checked; v.is_free = fr; p = S.rest('coach_clients', 'user_id=eq.' + c.user_id, { method: 'PATCH', body: v }).then(function () { G.closeSheet(); route(); }); }
         p.catch(function (er) { btn.disabled = false; G.toast(G.errText(er.body && er.body.error || er)); });
       };
     });
