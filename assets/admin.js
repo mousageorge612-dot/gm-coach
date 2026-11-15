@@ -162,11 +162,22 @@
       var left = c.end_date ? G.diffDays(G.today(), c.end_date) : null;
       $('#main').innerHTML = '<div class="card"><div class="row" style="align-items:flex-start"><div><div class="h1">' + esc(c.name) + '</div><div class="muted" style="font-size:13px"><span dir="ltr">@' + esc(c.username) + '</span> · ' + (c.gender === 'female' ? 'أنثى' : 'ذكر') + ' · ' + esc(PKG[c.package] || c.package || '') +
         (c.end_date ? ' · ينتهي ' + esc(c.end_date) + ' (' + (left < 0 ? 'منتهي' : 'باقي ' + left + ' يوم') + ')' : '') + (c.goal ? ' · ' + esc(c.goal) : '') + '</div></div>' +
-        '<div class="row" style="flex:none;flex-wrap:wrap;justify-content:flex-end"><button class="btn sm" id="ed">تعديل</button><button class="btn sm" id="pw">كلمة مرور جديدة</button>' + (c.phone ? '<a class="btn sm" target="_blank" rel="noopener" href="https://wa.me/' + esc(c.phone) + '">واتساب</a>' : '') + '</div></div></div>' +
+        '<div class="row" style="flex:none;flex-wrap:wrap;justify-content:flex-end"><button class="btn sm" id="ed">تعديل</button><button class="btn sm" id="pw">كلمة مرور جديدة</button><button class="btn sm" id="rs" style="color:#ff6b6b;border-color:rgba(255,107,107,.45)">تصفير التقدم</button>' + (c.phone ? '<a class="btn sm" target="_blank" rel="noopener" href="https://wa.me/' + esc(c.phone) + '">واتساب</a>' : '') + '</div></div></div>' +
         '<div class="sub-tabs">' + [['training', 'التدريب'], ['nutrition', 'التغذية'], ['progress', 'المتابعة'], ['photos', 'الصور'], ['notes', 'ملاحظاتي']].map(function (t) {
           return '<a class="chip' + (sub === t[0] ? ' on' : '') + '" style="text-decoration:none;color:inherit" href="#client/' + uid + '/' + t[0] + '">' + t[1] + '</a>';
         }).join('') + '</div><div id="sub"><div class="spinner"></div></div>';
       $('#ed').onclick = function () { clientForm(c); };
+      $('#rs').onclick = function () {
+        if (!confirm('تصفير تقدم ' + c.name + '؟\n\nرح ينحذف كل شي سجّله: التشيكات اليومية، الأوزان المسجلة بالتمارين، والوزن والخصر.\nالحساب والخطط بيضلوا متل ما هنن.\n\nهالخطوة ما بتتراجع.')) return;
+        var ph = confirm('بدك تحذف صور التقدم تبعه كمان؟\n\nموافق = احذف الصور\nإلغاء = خلّي الصور');
+        var btn = $('#rs'); btn.disabled = true;
+        var jobs = [S.rest('coach_checkins', 'client_id=eq.' + uid, { method: 'DELETE' }), S.rest('coach_logs', 'client_id=eq.' + uid, { method: 'DELETE' })];
+        if (ph) jobs.push(S.rest('coach_photos', 'select=path&client_id=eq.' + uid).then(function (rows) {
+          return Promise.all((rows || []).map(function (x) { return S.api('/storage/v1/object/coach-photos/' + x.path, { method: 'DELETE' }).catch(function () {}); }));
+        }).then(function () { return S.rest('coach_photos', 'client_id=eq.' + uid, { method: 'DELETE' }); }));
+        Promise.all(jobs).then(function () { G.toast('تصفّر تقدم ' + c.name + ' ✓'); route(); })
+          .catch(function (e) { btn.disabled = false; G.toast(G.errText(e)); });
+      };
       $('#pw').onclick = function () {
         var pw = genPw();
         if (!confirm('تغيير كلمة مرور ' + c.name + ' إلى: ' + pw + ' ؟')) return;
