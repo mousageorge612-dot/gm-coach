@@ -163,7 +163,7 @@
       $('#main').innerHTML = '<div class="card"><div class="row" style="align-items:flex-start"><div><div class="h1">' + esc(c.name) + '</div><div class="muted" style="font-size:13px"><span dir="ltr">@' + esc(c.username) + '</span> · ' + (c.gender === 'female' ? 'أنثى' : 'ذكر') + ' · ' + esc(PKG[c.package] || c.package || '') +
         (c.end_date ? ' · ينتهي ' + esc(c.end_date) + ' (' + (left < 0 ? 'منتهي' : 'باقي ' + left + ' يوم') + ')' : '') + (c.goal ? ' · ' + esc(c.goal) : '') + '</div></div>' +
         '<div class="row" style="flex:none;flex-wrap:wrap;justify-content:flex-end"><button class="btn sm" id="ed">تعديل</button><button class="btn sm" id="pw">كلمة مرور جديدة</button>' + (c.phone ? '<a class="btn sm" target="_blank" rel="noopener" href="https://wa.me/' + esc(c.phone) + '">واتساب</a>' : '') + '</div></div></div>' +
-        '<div class="sub-tabs">' + [['training', 'التدريب'], ['nutrition', 'التغذية'], ['progress', 'المتابعة'], ['notes', 'ملاحظاتي']].map(function (t) {
+        '<div class="sub-tabs">' + [['training', 'التدريب'], ['nutrition', 'التغذية'], ['progress', 'المتابعة'], ['photos', 'الصور'], ['notes', 'ملاحظاتي']].map(function (t) {
           return '<a class="chip' + (sub === t[0] ? ' on' : '') + '" style="text-decoration:none;color:inherit" href="#client/' + uid + '/' + t[0] + '">' + t[1] + '</a>';
         }).join('') + '</div><div id="sub"><div class="spinner"></div></div>';
       $('#ed').onclick = function () { clientForm(c); };
@@ -174,6 +174,7 @@
       };
       if (sub === 'training' || sub === 'nutrition') loadProgram(uid, sub, c);
       else if (sub === 'progress') progressTab(c);
+      else if (sub === 'photos') { $('#sub').innerHTML = '<div class="card"><b>صور التقدم</b><div id="photos" style="margin-top:10px"></div></div>'; G.photosUI(S, uid, $('#photos'), { coach: true }); }
       else notesTab(c);
     }).catch(fail);
   }

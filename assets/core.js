@@ -39,13 +39,22 @@
       headers: { Prefer: 'resolution=merge-duplicates,return=representation' } });
   };
   Session.prototype.fn = function (name, body) { return this.api('/functions/v1/' + name, { method: 'POST', body: body }); };
-  Session.prototype.upload = function (path, blob) {
+  Session.prototype.upload = function (path, blob, bucket) {
     var s = this;
     return s.token().then(function (t) {
-      return fetch(URL_ + '/storage/v1/object/' + BUCKET + '/' + path, { method: 'POST',
+      return fetch(URL_ + '/storage/v1/object/' + (bucket || BUCKET) + '/' + path, { method: 'POST',
         headers: { apikey: KEY_, Authorization: 'Bearer ' + t, 'Content-Type': blob.type || 'image/webp', 'x-upsert': 'true' }, body: blob })
         .then(function (r) { if (!r.ok) return r.text().then(function (x) { throw new Error('upload ' + r.status + ' ' + x); }); return path; });
     });
+  };
+
+  /* Private file -> object URL (needs the user's token). */
+  var BLOBS = {};
+  Session.prototype.blobUrl = function (bucket, path, fresh) {
+    var k = bucket + '/' + path; if (BLOBS[k] && !fresh) return Promise.resolve(BLOBS[k]);
+    return this.token().then(function (t) {
+      return fetch(URL_ + '/storage/v1/object/authenticated/' + k, { headers: { apikey: KEY_, Authorization: 'Bearer ' + t }, cache: 'no-store' });
+    }).then(function (r) { if (!r.ok) throw new Error('img ' + r.status); return r.blob(); }).then(function (b) { return (BLOBS[k] = URL.createObjectURL(b)); });
   };
 
   function raw(path, o) {
@@ -127,6 +136,73 @@
     var m = String(u || '').match(/(?:shorts\/|youtu\.be\/|v=|embed\/)([\w-]{11})/); return m ? m[1] : '';
   }
 
-  window.GM = { Session: Session, media: media, shrink: shrink, $: $, $$: $$, esc: esc, dstr: dstr, parseD: parseD, addDays: addDays,
+  /* ---------- progress photos (client app + coach dashboard) ---------- */
+  var PB = 'coach-photos', POSES = [['front', 'أمامية'], ['side', 'جانبية'], ['back', 'خلفية']];
+  function photosUI(S, uid, el, o) {
+    o = o || {};
+    var upDate = null;
+    function load() {
+      return S.rest('coach_photos', 'select=taken,pose,path&client_id=eq.' + uid + '&order=taken.desc').then(draw)
+        .catch(function () { el.innerHTML = '<div class="muted" style="font-size:13px">ما قدرنا نحمّل الصور، تأكد من الإنترنت.</div>'; });
+    }
+    function draw(rows) {
+      var sets = {}, t = today();
+      (rows || []).forEach(function (r) { (sets[r.taken] = sets[r.taken] || {})[r.pose] = r.path; });
+      var dates = Object.keys(sets).sort().reverse(), last = dates[0], first = dates[dates.length - 1];
+      var since = last ? diffDays(last, t) : null;
+      if (!upDate) upDate = o.coach ? t : (last && since < 7 ? last : t);
+      var cur = sets[upDate] || {};
+      var canUp = o.coach || !last || since < 7 || since >= 28;
+      var h = '';
+      if (!o.coach) {
+        h += '<p class="muted" style="font-size:13px;margin:6px 0 10px">3 صور: أمامية، جانبية، خلفية. بنفس المكان والإضاءة والوقفة كل مرة، وبتتجدد كل 4 إلى 6 أسابيع. ما حدا بيشوفها غير الكوتش.</p>';
+        h += '<div class="phst ' + (!last || since >= 28 ? 'due' : '') + '">' + (!last ? 'ارفع صور البداية هلق' : since >= 28 ? 'صار وقت الصور الجديدة (آخر صور من ' + since + ' يوم)' : 'الصور الجاية بعد ' + (28 - since) + ' يوم') + '</div>';
+      } else {
+        h += '<label class="field"><span>تاريخ الصور يلي بدك ترفعها</span><input class="input" type="date" id="ph-date" value="' + upDate + '"></label>';
+      }
+      if (canUp) {
+        h += '<div class="phg">' + POSES.map(function (p) {
+          return '<button class="ph up' + (cur[p[0]] ? ' has' : '') + '" data-up="' + p[0] + '"' + (cur[p[0]] ? ' data-p="' + esc(cur[p[0]]) + '"' : '') + '><b>' + (cur[p[0]] ? '↻' : '+') + '</b><span>' + p[1] + '</span></button>';
+        }).join('') + '</div><input type="file" accept="image/*" id="ph-file" hidden>';
+      }
+      if (dates.length) h += '<div class="phh">' + dates.map(function (d) {
+        var wk = Math.round(diffDays(first, d) / 7);
+        return '<div class="phd"><b dir="ltr">' + d + '</b> <span class="muted">' + (d === first ? 'البداية' : 'بعد ' + wk + ' أسبوع') + '</span></div><div class="phg">' + POSES.map(function (p) {
+          var x = sets[d][p[0]]; return x ? '<button class="ph has" data-p="' + esc(x) + '" data-d="' + d + '" data-pose="' + p[0] + '"><span>' + p[1] + '</span></button>' : '<div class="ph"><span>' + p[1] + '</span></div>';
+        }).join('') + '</div>';
+      }).join('') + '</div>';
+      else if (o.coach) h += '<div class="empty">المشترك ما رفع صور لسا.</div>';
+      el.innerHTML = h;
+      $$('[data-p]', el).forEach(function (b) {
+        S.blobUrl(PB, b.getAttribute('data-p')).then(function (u) { b.style.backgroundImage = 'url(' + u + ')'; }).catch(function () {});
+        if (b.hasAttribute('data-d')) b.onclick = function () {
+          var d = b.getAttribute('data-d'), pose = b.getAttribute('data-pose'), a = sets[first] && sets[first][pose], two = a && d !== first;
+          sheet('<div class="h2">' + (two ? 'مقارنة مع البداية' : d) + '</div><div class="' + (two ? 'grid2' : '') + '">' +
+            (two ? '<div><div class="muted" style="font-size:12px;text-align:center" dir="ltr">' + first + '</div><img class="phbig" id="pb1"></div>' : '') +
+            '<div>' + (two ? '<div class="muted" style="font-size:12px;text-align:center" dir="ltr">' + d + '</div>' : '') + '<img class="phbig" id="pb2"></div></div>', function (bd) {
+            S.blobUrl(PB, sets[d][pose]).then(function (u) { $('#pb2', bd).src = u; });
+            if (two) S.blobUrl(PB, a).then(function (u) { $('#pb1', bd).src = u; });
+          });
+        };
+      });
+      var di = $('#ph-date', el); if (di) di.onchange = function () { if (di.value) { upDate = di.value; draw(rows); } };
+      var fi = $('#ph-file', el), pose = null;
+      $$('[data-up]', el).forEach(function (b) { b.onclick = function () { pose = b.getAttribute('data-up'); fi.value = ''; fi.click(); }; });
+      if (fi) fi.onchange = function () {
+        var f = fi.files && fi.files[0]; if (!f || !pose) return;
+        var path = uid + '/' + upDate + '-' + pose + '.webp', btn = $('[data-up="' + pose + '"]', el);
+        btn.classList.add('busy'); btn.disabled = true;
+        shrink(f, 1400).then(function (b) { return S.upload(path, b, PB); })
+          .then(function () { return S.upsert('coach_photos', { client_id: uid, taken: upDate, pose: pose, path: path }, 'client_id,taken,pose'); })
+          .then(function () { return S.blobUrl(PB, path, true); })
+          .then(function () { toast('انرفعت الصورة ✓'); return load(); })
+          .catch(function () { btn.classList.remove('busy'); btn.disabled = false; toast('ما انرفعت الصورة، جرب مرة تانية'); });
+      };
+    }
+    el.innerHTML = '<div class="spinner"></div>';
+    return load();
+  }
+
+  window.GM = { photosUI: photosUI, Session: Session, media: media, shrink: shrink, $: $, $$: $$, esc: esc, dstr: dstr, parseD: parseD, addDays: addDays,
     today: today, diffDays: diffDays, WD: WD, toast: toast, errText: errText, sheet: sheet, closeSheet: closeSheet, ytId: ytId, pad: pad };
 })();

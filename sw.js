@@ -1,6 +1,6 @@
 /* GM Coach service worker: app shell network-first, fonts/images cache-first, API never cached. */
-var V = 'gmc-v5', IMG = 'gmc-img-v1';
-var SHELL = ['./', 'index.html', 'assets/styles.css?v=1', 'assets/core.js?v=1', 'assets/app.js?v=4', 'assets/img/logo.png', 'assets/img/icon-192.png',
+var V = 'gmc-v6', IMG = 'gmc-img-v1';
+var SHELL = ['./', 'index.html', 'assets/styles.css?v=3', 'assets/core.js?v=2', 'assets/app.js?v=5', 'assets/img/logo.png', 'assets/img/icon-192.png',
   'assets/fonts/cairo-arabic-400-normal.woff2', 'assets/fonts/cairo-arabic-700-normal.woff2', 'assets/fonts/cairo-arabic-900-normal.woff2', 'assets/fonts/sf-sports-night.woff2'];
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(V).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });
 self.addEventListener('activate', function (e) {
@@ -9,6 +9,7 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   var r = e.request, u = new URL(r.url);
   if (r.method !== 'GET') return;
+  if (u.pathname.indexOf('/object/authenticated/') >= 0) return;
   if (u.pathname.indexOf('/storage/v1/object/public/') >= 0 || /\.(woff2|png|webp|jpg)$/.test(u.pathname)) {
     e.respondWith(caches.open(IMG).then(function (c) { return c.match(r).then(function (hit) { return hit || fetch(r).then(function (res) { if (res.ok || res.type === 'opaque') c.put(r, res.clone()); return res; }); }); }));
     return;

@@ -281,6 +281,7 @@
     Object.keys(D.checkins).sort().forEach(function (d) { var w = parseFloat(D.checkins[d].weight); if (w) ws.push([d, w]); });
     h += '<div class="card"><b>آخر 14 يوم</b><div style="display:flex;gap:4px;direction:ltr;justify-content:space-between;margin-top:8px">' + dots + '</div></div>';
     if (ws.length) h += '<div class="card"><b>وزنك</b> <span class="muted">' + ws[ws.length - 1][1] + ' كغ' + (ws.length > 1 ? ' (' + fmtDiff(ws[ws.length - 1][1] - ws[0][1]) + ')' : '') + '</span>' + spark(ws) + '</div>';
+    h += '<div class="card"><b>صور التقدم</b><div id="photos"></div></div>';
     return h;
   }
   function fmtDiff(v) { v = Math.round(v * 10) / 10; return (v > 0 ? '+' : '') + v + ' كغ'; }
@@ -339,6 +340,7 @@
       };
     });
     $$('[data-ck]').forEach(function (b) { b.onclick = function () { var t = G.today(), c = D.checkins[t] = D.checkins[t] || {}; c[b.getAttribute('data-ck')] = b.getAttribute('data-v'); $$('[data-ck="' + b.getAttribute('data-ck') + '"]').forEach(function (x) { x.classList.toggle('on', x === b); }); }; });
+    var phEl = $('#photos'); if (phEl) G.photosUI(S, S.a.uid, phEl);
     var sv = $('#ck-save'); if (sv) sv.onclick = function () { var t = G.today(), c = D.checkins[t] = D.checkins[t] || {}; c.weight = $('#ck-w').value.trim(); c.waist = $('#ck-waist').value.trim(); c.note = $('#ck-note').value.trim(); saveCheckin(t).then(render); };
     var lo = $('#lo'); if (lo) lo.onclick = logout;
     var snd = $('#snd'); if (snd) snd.onclick = function () {
