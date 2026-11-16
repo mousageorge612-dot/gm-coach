@@ -136,27 +136,30 @@
   function exVid(e) { var f = D.me.gender === 'female'; return f ? (e.video_female || e.video_male) : (e.video_male || e.video_female); }
   function exCard(it, i, dayLogs) {
     var e = D.ex[it.ex] || { name_ar: it.name || 'تمرين', id: it.ex };
-    var img = exImg(e), vid = exVid(e), logged = (dayLogs[e.id] || []).some(function (s) { return s && (s.w || s.r); });
+    var img = exImg(e), vid = exVid(e), logged = (dayLogs[e.id] || []).some(function (s) { return s && (s.w || s.r || s.t); });
     var h = '<div class="ex' + (logged ? ' done' : '') + '" data-ex="' + e.id + '">' +
       '<div class="pic">' + (img ? '<img loading="lazy" src="' + esc(img) + '" alt="' + esc(e.name_ar) + '">' : '<span class="no">بدون صورة</span>') + '<span class="num">' + (i + 1) + '</span></div>' +
       '<div class="body"><div class="nm">' + esc(e.name_ar) + '</div>' + (e.name_en ? '<div class="nmen">' + esc(e.name_en) + '</div>' : '') +
       '<div class="specs"><div class="spec"><b>' + esc(it.sets || '-') + '</b><span>جولات</span></div><div class="spec"><b>' + esc(it.reps || '-') + '</b><span>عدّات</span></div><div class="spec"><b>' + esc(it.rest || '-') + '</b><span>راحة</span></div></div>' +
       (it.note ? '<div class="note">' + esc(it.note) + '</div>' : '') + (e.tips ? '<div class="muted" style="font-size:13px;margin-bottom:10px;white-space:pre-line">' + esc(e.tips) + '</div>' : '') +
       '<div class="acts">' + (vid ? '<a class="btn gold" target="_blank" rel="noopener" href="' + esc(vid) + '">▶ الشرح</a>' : '') +
-      '<button class="btn" data-log="' + e.id + '">' + (logged ? '✓ مسجّل' : 'سجّل أوزانك') + '</button>' +
+      '<button class="btn" data-log="' + e.id + '">' + (logged ? '✓ مسجّل' : isTimed(it) ? 'سجّل المدة' : 'سجّل أوزانك') + '</button>' +
       (restSecs(it.rest) ? '<button class="btn tm" data-rest="' + restSecs(it.rest) + '" aria-label="مؤقت الراحة">⏱</button>' : '') + '</div>';
-    if (openLog[e.id]) h += setsForm(e.id, parseInt(it.sets, 10) || 3, dayLogs[e.id] || []);
+    if (openLog[e.id]) h += setsForm(e.id, parseInt(it.sets, 10) || 3, dayLogs[e.id] || [], isTimed(it));
     return h + '</div></div>';
   }
-  function setsForm(id, n, cur) {
-    var last = lastLog(id), h = '<div class="sets" data-sets="' + id + '"><div class="set"><span></span><span class="lbl">الوزن (كغ)</span><span class="lbl">العدّات</span></div>';
+  function isTimed(it) { return /ثاني|ثوان|دقيق|sec|min/i.test(String(it.reps || '')); }
+  function fmtSet(s) { return s.t ? s.t + ' ث' : (s.w || '-') + '×' + (s.r || '-'); }
+  function setsForm(id, n, cur, timed) {
+    var last = lastLog(id), h = '<div class="sets" data-sets="' + id + '"><div class="set"><span></span>' + (timed ? '<span class="lbl" style="grid-column:span 2">المدة (ثانية)</span>' : '<span class="lbl">الوزن (كغ)</span><span class="lbl">العدّات</span>') + '</div>';
     n = Math.max(n, cur.length);
     for (var s = 0; s < n; s++) {
       var v = cur[s] || {};
+      if (timed) { h += '<div class="set"><span class="lbl">' + (s + 1) + '</span><input class="input" style="grid-column:span 2" inputmode="numeric" placeholder="كم ثانية ثبتت" data-t="' + s + '" value="' + esc(v.t || '') + '"></div>'; continue; }
       h += '<div class="set"><span class="lbl">' + (s + 1) + '</span><input class="input" inputmode="decimal" data-w="' + s + '" value="' + esc(v.w || '') + '"><input class="input" inputmode="numeric" data-r="' + s + '" value="' + esc(v.r || '') + '"></div>';
     }
     h += '</div>';
-    if (last) h += '<div class="last">آخر مرة (' + esc(last.day) + '): ' + (last.sets || []).map(function (s) { return (s.w || '-') + '×' + (s.r || '-'); }).join('  ·  ') + '</div>';
+    if (last) h += '<div class="last">آخر مرة (' + esc(last.day) + '): ' + (last.sets || []).filter(Boolean).map(fmtSet).join('  ·  ') + '</div>';
     return h;
   }
   function restSecs(r) {
@@ -222,12 +225,13 @@
     var box = $('[data-sets="' + id + '"]'); if (!box) return;
     var sets = [];
     $$('[data-w]', box).forEach(function (inp) { var s = +inp.getAttribute('data-w'); sets[s] = sets[s] || {}; sets[s].w = inp.value.trim(); });
+    $$('[data-t]', box).forEach(function (inp) { var s = +inp.getAttribute('data-t'); sets[s] = sets[s] || {}; sets[s].t = inp.value.trim(); });
     $$('[data-r]', box).forEach(function (inp) { var s = +inp.getAttribute('data-r'); sets[s] = sets[s] || {}; sets[s].r = inp.value.trim(); });
     var t = G.today(), row = { client_id: S.a.uid, day: t, exercise_id: +id, sets: sets, updated_at: new Date().toISOString() };
     D.logs = D.logs.filter(function (l) { return !(l.day === t && l.exercise_id === +id); }); D.logs.unshift({ day: t, exercise_id: +id, sets: sets }); saveCache();
     S.upsert('coach_logs', row, 'client_id,day,exercise_id').catch(function () { G.toast('ما انحفظ، تأكد من الإنترنت'); });
-    var card = $('.ex[data-ex="' + id + '"]'), on = sets.some(function (s) { return s && (s.w || s.r); });
-    if (card) { card.classList.toggle('done', on); var b = $('[data-log="' + id + '"]', card); if (b) b.textContent = on ? '✓ مسجّل' : 'سجّل أوزانك'; }
+    var card = $('.ex[data-ex="' + id + '"]'), on = sets.some(function (s) { return s && (s.w || s.r || s.t); });
+    if (card) { card.classList.toggle('done', on); var b = $('[data-log="' + id + '"]', card); if (b) b.textContent = on ? '✓ مسجّل' : $('[data-t]', box) ? 'سجّل المدة' : 'سجّل أوزانك'; }
     markTrained();
   }
   function markTrained() {

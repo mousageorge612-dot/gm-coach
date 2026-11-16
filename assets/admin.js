@@ -449,7 +449,7 @@
       var ids = Object.keys(by);
       h += '<div class="card"><b>الأوزان بالتمارين</b>' + (ids.length ? ids.map(function (id) {
         var e = exById(+id), a = by[id].slice(0, 6);
-        return '<div style="margin-top:10px"><b style="font-size:14px">' + esc(e ? e.name_ar : '#' + id) + '</b>' + a.map(function (l) { return '<div class="muted" style="font-size:12.5px"><span dir="ltr">' + esc(l.day.slice(5)) + '</span>: ' + (l.sets || []).filter(Boolean).map(function (s) { return (s.w || '-') + '×' + (s.r || '-'); }).join(' · ') + '</div>'; }).join('') + '</div>';
+        return '<div style="margin-top:10px"><b style="font-size:14px">' + esc(e ? e.name_ar : '#' + id) + '</b>' + a.map(function (l) { return '<div class="muted" style="font-size:12.5px"><span dir="ltr">' + esc(l.day.slice(5)) + '</span>: ' + (l.sets || []).filter(Boolean).map(function (s) { return s.t ? s.t + ' ث' : (s.w || '-') + '×' + (s.r || '-'); }).join(' · ') + '</div>'; }).join('') + '</div>';
       }).join('') : '<p class="muted">ما سجّل أوزان لسا.</p>') + '</div>';
       $('#sub').innerHTML = h;
     }).catch(fail);
