@@ -148,7 +148,7 @@
     if (openLog[e.id]) h += setsForm(e.id, parseInt(it.sets, 10) || 3, dayLogs[e.id] || [], isTimed(it));
     return h + '</div></div>';
   }
-  function isTimed(it) { return /ثاني|ثوان|دقيق|sec|min/i.test(String(it.reps || '')); }
+  function isTimed(it) { return /\d\s*ث|ثاني|ثوان|دقيق|sec|min/i.test(String(it.reps || '')); }
   function fmtSet(s) { return s.t ? s.t + ' ث' : (s.w || '-') + '×' + (s.r || '-'); }
   function setsForm(id, n, cur, timed) {
     var last = lastLog(id), h = '<div class="sets" data-sets="' + id + '"><div class="set"><span></span>' + (timed ? '<span class="lbl" style="grid-column:span 2">المدة (ثانية)</span>' : '<span class="lbl">الوزن (كغ)</span><span class="lbl">العدّات</span>') + '</div>';
