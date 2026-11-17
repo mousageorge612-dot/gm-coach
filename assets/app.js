@@ -265,7 +265,6 @@
     ['cardio', 'كارديو؟', [['yes', 'نعم'], ['no', 'لا']]],
     ['food', 'التزامك بالأكل', [['100', '100%'], ['75', '75%'], ['50', '50%'], ['25', 'أقل']]],
     ['sleep', 'النوم', [['8', '+8 س'], ['7', '7 س'], ['6', '6 س'], ['5', '-5 س']]],
-    ['water', 'المي', [['3', '+3 ل'], ['2', '2 ل'], ['1', '-1 ل']]],
     ['energy', 'طاقتك', [['high', 'عالية'], ['mid', 'متوسطة'], ['low', 'منخفضة']]]
   ];
   function progView() {
@@ -275,6 +274,7 @@
       h += '<div style="margin-bottom:10px"><div style="font-weight:700;margin-bottom:6px">' + q[1] + '</div><div class="chips" style="margin:0;flex-wrap:wrap">' +
         q[2].map(function (o) { return '<button class="chip' + (String(c[q[0]]) === o[0] ? ' on' : '') + '" data-ck="' + q[0] + '" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>';
     });
+    h += waterBox(c);
     h += '<div class="grid2"><label class="field"><span>الوزن (كغ) اختياري</span><input class="input" id="ck-w" inputmode="decimal" value="' + esc(c.weight || '') + '"></label>' +
       '<label class="field"><span>الخصر (سم) اختياري</span><input class="input" id="ck-waist" inputmode="decimal" value="' + esc(c.waist || '') + '"></label></div>' +
       '<label class="field"><span>ملاحظة للكوتش</span><textarea class="input" id="ck-note" rows="2">' + esc(c.note || '') + '</textarea></label>' +
@@ -288,13 +288,37 @@
     h += '<div class="card"><b>صور التقدم</b><div id="photos"></div></div>';
     return h;
   }
+  /* water: tap cups, target from the nutrition plan (first number in its water text) */
+  function waterTarget() { var w = D.nutrition && D.nutrition.data && D.nutrition.data.water, m = String(w || '').match(/\d+(?:[.,]\d+)?/); var v = m ? parseFloat(m[0].replace(',', '.')) : 0; return v > 0 && v <= 8 ? v : 3; }
+  function fmtL(v) { return String(Math.round(v * 100) / 100); }
+  function waterInner(c) {
+    var tg = waterTarget(), w = parseFloat(c.water) || 0, pct = Math.min(100, Math.round(w / tg * 100)), cups = Math.round(tg / .25), done = Math.round(w / .25), g = '';
+    for (var i = 0; i < cups; i++) g += '<i style="flex:1;height:14px;border-radius:4px;background:' + (i < done ? 'var(--gold)' : '#262626') + '"></i>';
+    return '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><b>المي</b><span><b class="gold" style="font-size:20px">' + fmtL(w) + '</b> <span class="muted">من ' + fmtL(tg) + ' لتر' + (w >= tg ? ' ✓' : '') + '</span></span></div>' +
+      '<div style="display:flex;gap:3px;direction:ltr;margin-bottom:8px">' + g + '</div>' +
+      '<div class="muted" style="font-size:12.5px;margin-bottom:8px">' + (w >= tg ? 'وصلت لهدفك اليوم 💧' : 'باقي ' + fmtL(Math.max(0, tg - w)) + ' لتر (' + Math.ceil((tg - w) / .25 - 1e-9) + ' كاسة)') + ' · ' + pct + '%</div>';
+  }
+  function waterBox(c) {
+    return '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a2a;border-radius:12px"><div id="wbox">' + waterInner(c) + '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 44px;gap:6px">' +
+      [['0.25', '+ كاسة', '250 مل'], ['0.5', '+ قنينة', '500 مل'], ['1', '+ لتر', '1000 مل']].map(function (x) { return '<button class="btn sm gold" data-wa="' + x[0] + '" style="flex-direction:column;gap:0;padding:7px 4px;min-width:0;white-space:normal;line-height:1.25"><span>' + x[1] + '</span><small style="font-weight:400;font-size:11px">' + x[2] + '</small></button>'; }).join('') +
+      '<button class="btn sm" data-wa="-0.25" style="padding:0;font-size:20px" aria-label="ناقص كاسة">−</button></div></div>';
+  }
+  var wTimer;
+  function addWater(d) {
+    var t = G.today(), c = D.checkins[t] = D.checkins[t] || {};
+    c.water = fmtL(Math.max(0, Math.min(10, (parseFloat(c.water) || 0) + d)));
+    var b = $('#wbox'); if (b) b.innerHTML = waterInner(c);
+    if (navigator.vibrate) try { navigator.vibrate(15); } catch (e) {}
+    saveCache(); clearTimeout(wTimer); wTimer = setTimeout(function () { saveCheckin(t, true); }, 1200);
+  }
   function fmtDiff(v) { v = Math.round(v * 10) / 10; return (v > 0 ? '+' : '') + v + ' كغ'; }
   function score(c) {
     var s = 0, n = 0;
     if (c.train) { n++; s += c.train === 'no' ? 0 : 1; }
     if (c.food) { n++; s += (+c.food) / 100; }
     if (c.sleep) { n++; s += +c.sleep >= 7 ? 1 : +c.sleep >= 6 ? .5 : 0; }
-    if (c.water) { n++; s += +c.water >= 2 ? 1 : .4; }
+    if (c.water) { n++; s += Math.min(1, (parseFloat(c.water) || 0) / waterTarget()); }
     return n ? Math.round(s / n * 100) : 0;
   }
   function spark(ws) {
@@ -343,6 +367,7 @@
         c.food = String(n ? Math.round(k / n * 4) * 25 : 0); saveCheckin(t, true); render();
       };
     });
+    $$('[data-wa]').forEach(function (b) { b.onclick = function () { addWater(parseFloat(b.getAttribute('data-wa'))); }; });
     $$('[data-ck]').forEach(function (b) { b.onclick = function () { var t = G.today(), c = D.checkins[t] = D.checkins[t] || {}; c[b.getAttribute('data-ck')] = b.getAttribute('data-v'); $$('[data-ck="' + b.getAttribute('data-ck') + '"]').forEach(function (x) { x.classList.toggle('on', x === b); }); }; });
     var phEl = $('#photos'); if (phEl) G.photosUI(S, S.a.uid, phEl);
     var sv = $('#ck-save'); if (sv) sv.onclick = function () { var t = G.today(), c = D.checkins[t] = D.checkins[t] || {}; c.weight = $('#ck-w').value.trim(); c.waist = $('#ck-waist').value.trim(); c.note = $('#ck-note').value.trim(); saveCheckin(t).then(render); };

@@ -67,7 +67,7 @@
     if (c.train) { n++; s += c.train === 'no' ? 0 : 1; }
     if (c.food) { n++; s += (+c.food) / 100; }
     if (c.sleep) { n++; s += +c.sleep >= 7 ? 1 : +c.sleep >= 6 ? .5 : 0; }
-    if (c.water) { n++; s += +c.water >= 2 ? 1 : .4; }
+    if (c.water) { n++; s += Math.min(1, (parseFloat(c.water) || 0) / 3); }
     return n ? Math.round(s / n * 100) : 0;
   }
   var CF = 'all';
@@ -443,7 +443,7 @@
       var h = '<div class="card"><b>الوزن</b>' + (ws.length ? ' <span class="muted">' + ws[0][1] + ' ← ' + ws[ws.length - 1][1] + ' كغ</span>' + spark(ws) : '<p class="muted">ما سجّل وزن لسا.</p>') + '</div>';
       h += '<div class="card" style="overflow-x:auto"><b>التشيكات اليومية</b>' + (ck.length ? '<table class="t"><tr><th>اليوم</th><th>تمرين</th><th>كارديو</th><th>أكل</th><th>نوم</th><th>مي</th><th>طاقة</th><th>وزن</th><th>ملاحظة</th></tr>' + ck.map(function (x) {
         var d = x.data || {};
-        return '<tr><td dir="ltr">' + esc(x.day.slice(5)) + '</td><td>' + esc((LBL.train[d.train] || '-')) + '</td><td>' + esc(LBL.cardio[d.cardio] || '-') + '</td><td>' + esc(d.food ? d.food + '%' : '-') + '</td><td>' + esc(d.sleep || '-') + '</td><td>' + esc(d.water || '-') + '</td><td>' + esc(LBL.energy[d.energy] || '-') + '</td><td>' + esc(d.weight || '-') + '</td><td style="text-align:right">' + esc(d.note || '') + '</td></tr>';
+        return '<tr><td dir="ltr">' + esc(x.day.slice(5)) + '</td><td>' + esc((LBL.train[d.train] || '-')) + '</td><td>' + esc(LBL.cardio[d.cardio] || '-') + '</td><td>' + esc(d.food ? d.food + '%' : '-') + '</td><td>' + esc(d.sleep || '-') + '</td><td>' + esc(d.water ? d.water + ' ل' : '-') + '</td><td>' + esc(LBL.energy[d.energy] || '-') + '</td><td>' + esc(d.weight || '-') + '</td><td style="text-align:right">' + esc(d.note || '') + '</td></tr>';
       }).join('') + '</table>' : '<p class="muted">ما في تشيكات لسا.</p>') + '</div>';
       var by = {}; logs.forEach(function (l) { (by[l.exercise_id] = by[l.exercise_id] || []).push(l); });
       var ids = Object.keys(by);
