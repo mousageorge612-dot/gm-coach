@@ -305,12 +305,13 @@
       '<button class="btn sm" data-wa="-0.25" style="padding:0;font-size:20px" aria-label="ناقص كاسة">−</button></div></div>';
   }
   var wTimer;
+  function autoSave() { var t = G.today(); saveCache(); clearTimeout(wTimer); wTimer = setTimeout(function () { saveCheckin(t, true); }, 1200); }
   function addWater(d) {
     var t = G.today(), c = D.checkins[t] = D.checkins[t] || {};
     c.water = fmtL(Math.max(0, Math.min(10, (parseFloat(c.water) || 0) + d)));
     var b = $('#wbox'); if (b) b.innerHTML = waterInner(c);
     if (navigator.vibrate) try { navigator.vibrate(15); } catch (e) {}
-    saveCache(); clearTimeout(wTimer); wTimer = setTimeout(function () { saveCheckin(t, true); }, 1200);
+    autoSave();
   }
   function fmtDiff(v) { v = Math.round(v * 10) / 10; return (v > 0 ? '+' : '') + v + ' كغ'; }
   function score(c) {
@@ -368,7 +369,8 @@
       };
     });
     $$('[data-wa]').forEach(function (b) { b.onclick = function () { addWater(parseFloat(b.getAttribute('data-wa'))); }; });
-    $$('[data-ck]').forEach(function (b) { b.onclick = function () { var t = G.today(), c = D.checkins[t] = D.checkins[t] || {}; c[b.getAttribute('data-ck')] = b.getAttribute('data-v'); $$('[data-ck="' + b.getAttribute('data-ck') + '"]').forEach(function (x) { x.classList.toggle('on', x === b); }); }; });
+    $$('[data-ck]').forEach(function (b) { b.onclick = function () { var t = G.today(), c = D.checkins[t] = D.checkins[t] || {}; c[b.getAttribute('data-ck')] = b.getAttribute('data-v'); $$('[data-ck="' + b.getAttribute('data-ck') + '"]').forEach(function (x) { x.classList.toggle('on', x === b); }); autoSave(); }; });
+    [['ck-w', 'weight'], ['ck-waist', 'waist'], ['ck-note', 'note']].forEach(function (f) { var el = $('#' + f[0]); if (el) el.oninput = function () { var t = G.today(), c = D.checkins[t] = D.checkins[t] || {}; c[f[1]] = el.value.trim(); autoSave(); }; });
     var phEl = $('#photos'); if (phEl) G.photosUI(S, S.a.uid, phEl);
     var sv = $('#ck-save'); if (sv) sv.onclick = function () { var t = G.today(), c = D.checkins[t] = D.checkins[t] || {}; c.weight = $('#ck-w').value.trim(); c.waist = $('#ck-waist').value.trim(); c.note = $('#ck-note').value.trim(); saveCheckin(t).then(render); };
     var lo = $('#lo'); if (lo) lo.onclick = logout;
