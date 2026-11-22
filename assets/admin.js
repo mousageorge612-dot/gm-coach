@@ -59,7 +59,7 @@
       [['clients', 'المشتركين'], ['ex', 'مكتبة التمارين'], ['tpl', 'القوالب']].map(function (n) { return '<a href="#' + n[0] + '" class="' + (active === n[0] ? 'on' : '') + '">' + n[1] + '</a>'; }).join('') +
       '</nav><div id="main">' + body + '</div></div>';
     $('#lo').onclick = function () { S.clear(); renderLogin(); };
-    var nx = $('#ntf-x'); if (nx) nx.onclick = function () { G.toast('هالمتصفح ما بيدعم الإشعارات. افتح coach.georgemousa.com/admin من Chrome عالموبايل (مو من تطبيق APK)'); };
+    var nx = $('#ntf-x'); if (nx) nx.onclick = function () { G.toast(/iPhone|iPad/.test(navigator.userAgent) ? 'عالآيفون: افتح اللوحة من Safari، كبسة المشاركة ⬆️ ثم «إضافة إلى الشاشة الرئيسية»، وافتحها من الأيقونة الجديدة وكبس هالزر' : 'هالمتصفح ما بيدعم الإشعارات. افتح coach.georgemousa.com/admin من Chrome (مو من تطبيق APK)'); };
     var nb = $('#ntf'); if (nb) nb.onclick = function () {
       if (Notification.permission === 'denied') return G.toast('الإشعارات ممنوعة من إعدادات المتصفح لهالموقع، فعّلها من هنيك');
       Notification.requestPermission().then(function (p) {
