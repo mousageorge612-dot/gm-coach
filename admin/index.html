@@ -18,6 +18,8 @@
 .nav{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 .nav a{text-decoration:none;color:var(--text);border:1px solid var(--line);border-radius:999px;padding:7px 16px;background:var(--surface)}
 .nav a.on{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
+.nbadge:empty{display:none}.nbadge{display:inline-block;min-width:18px;padding:0 5px;margin-inline-start:4px;border-radius:9px;background:#e5484d;color:#fff;font-size:11px;line-height:18px;text-align:center;font-weight:700}
+.chips a.chip{text-decoration:none;color:var(--text)}.chips a.chip.on{color:#000}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:10px 12px}.kpi b{font-size:24px;display:block;font-weight:900}.kpi span{font-size:12.5px;color:var(--muted)}
 .cl{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;text-decoration:none;color:inherit}
@@ -63,6 +65,6 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}table.t td,table.t th
 <body>
 <div id="app"><div class="spinner"></div></div>
 <script src="../assets/core.js?v=2"></script>
-<script src="../assets/admin.js?v=9"></script>
+<script src="../assets/admin.js?v=10"></script>
 </body>
 </html>

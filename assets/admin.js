@@ -45,6 +45,7 @@
     if (page === 'ex') return exPage();
     if (page === 'tpl' && h[1]) return tplEdit(+h[1]);
     if (page === 'tpl') return tplPage();
+    if (page === 'inbox') return inboxPage(h[1] || 'me');
     return clientsPage();
   }
   window.addEventListener('hashchange', function () {
@@ -56,9 +57,10 @@
     $('#app').innerHTML = '<div class="wrap wide"><div class="top"><div class="brand"><img src="../assets/img/logo.png" alt="GM"><div><b>لوحة التحكم</b><small>GM COACH</small></div></div>' +
       '<div style="display:flex;gap:6px">' + ('Notification' in window && 'PushManager' in window ? '<button class="btn sm' + (Notification.permission === 'granted' ? ' gold' : ' ghost') + '" id="ntf" title="الإشعارات">🔔 ' + (Notification.permission === 'granted' ? 'مفعّلة' : 'فعّل الإشعارات') + '</button>' : '<button class="btn sm ghost" id="ntf-x">🔔 الإشعارات</button>') +
       '<button class="btn sm ghost" id="lo">خروج</button></div></div><nav class="nav">' +
-      [['clients', 'المشتركين'], ['ex', 'مكتبة التمارين'], ['tpl', 'القوالب']].map(function (n) { return '<a href="#' + n[0] + '" class="' + (active === n[0] ? 'on' : '') + '">' + n[1] + '</a>'; }).join('') +
+      [['clients', 'المشتركين'], ['ex', 'مكتبة التمارين'], ['tpl', 'القوالب'], ['inbox', 'الإشعارات <span class="nbadge" id="nbadge"></span>']].map(function (n) { return '<a href="#' + n[0] + '" class="' + (active === n[0] ? 'on' : '') + '">' + n[1] + '</a>'; }).join('') +
       '</nav><div id="main">' + body + '</div></div>';
     $('#lo').onclick = function () { S.clear(); renderLogin(); };
+    unread();
     var nx = $('#ntf-x'); if (nx) nx.onclick = function () { G.toast(/iPhone|iPad/.test(navigator.userAgent) ? 'عالآيفون: افتح اللوحة من Safari، كبسة المشاركة ⬆️ ثم «إضافة إلى الشاشة الرئيسية»، وافتحها من الأيقونة الجديدة وكبس هالزر' : 'هالمتصفح ما بيدعم الإشعارات. افتح coach.georgemousa.com/admin من Chrome (مو من تطبيق APK)'); };
     var nb = $('#ntf'); if (nb) nb.onclick = function () {
       if (Notification.permission === 'denied') return G.toast('الإشعارات ممنوعة من إعدادات المتصفح لهالموقع، فعّلها من هنيك');
@@ -420,6 +422,64 @@
         S.rest('coach_exercises', 'id=eq.' + e.id, { method: 'DELETE' }).then(function () { EX = EX.filter(function (y) { return y.id !== e.id; }); G.closeSheet(); if (done) done(); });
       };
     });
+  }
+
+  /* ---------- notifications inbox ---------- */
+  function unread() {
+    S.rest('coach_inbox', 'select=id&read=eq.false&limit=99').then(function (r) { var b = $('#nbadge'); if (b) b.textContent = r && r.length ? r.length : ''; }).catch(function () {});
+  }
+  function dmTime(ts) {
+    var d = new Date(Date.parse(ts) + 3 * 3600e3), p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return p(d.getUTCDate()) + '/' + p(d.getUTCMonth() + 1) + ' · ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
+  }
+  var NK = { morning: 'تذكير تمرين', photos: 'صور التقدّم', night: 'تذكير التقرير', test: 'تجربة', coach_daily: 'ملخّص اليوم', coach_weekly: 'ملخّص الأسبوع' };
+  var NST = { sent: ['وصل ✓', 'green'], failed: ['فشل', 'red'], expired: ['الجهاز لغى الاشتراك', 'red'], no_device: ['ما مفعّل إشعارات', 'muted'] };
+  function nKind(r) { return r.kind === 'morning' && /صور/.test(r.title || '') ? 'photos' : r.kind; }
+  function inboxPage(tab) {
+    loading('inbox');
+    var tabs = '<div class="chips">' + [['me', 'إشعاراتي'], ['clients', 'المرسلة للمشتركين'], ['devices', 'مين مفعّل']].map(function (t) { return '<a class="chip' + (t[0] === tab ? ' on' : '') + '" href="#inbox/' + t[0] + '">' + t[1] + '</a>'; }).join('') + '</div>';
+    if (tab === 'me') return S.rest('coach_inbox', 'select=*&order=created_at.desc&limit=100').then(function (r) {
+      r = r || [];
+      $('#main').innerHTML = tabs + '<p class="muted" style="margin-top:0">كل الملخّصات يلي بتوصلك: ملخّص كل ليلة 11، الأسبوعي الأحد 10 الصبح، وتنبيهات التجديد. للمدفوعين بس.</p><div class="list">' +
+        (r.length ? r.map(function (x) {
+          return '<div class="cl' + (x.read ? '' : ' warn') + '" style="display:block"><div class="nm">' + (x.read ? '' : '<span class="tg pd">جديد</span> ') + esc(x.title) + '</div><div class="sub" style="white-space:pre-line;margin-top:4px">' + esc(x.body) + '</div><div class="muted" style="font-size:12px;margin-top:6px">' + dmTime(x.created_at) + '</div></div>';
+        }).join('') : '<div class="empty">لسا ما وصل شي. أول ملخّص الليلة الساعة 11:05.</div>') + '</div>';
+      var ids = r.filter(function (x) { return !x.read; }).map(function (x) { return x.id; });
+      if (ids.length) S.rest('coach_inbox', 'id=in.(' + ids.join(',') + ')', { method: 'PATCH', body: { read: true } }).then(function () { var b = $('#nbadge'); if (b) b.textContent = ''; }).catch(function () {});
+    }).catch(fail);
+    return Promise.all([S.rest('coach_clients', 'select=user_id,name,active,package,is_free,end_date&order=name.asc'), S.rest('coach_push_subs', 'select=client_id,ua,created_at'),
+      tab === 'clients' ? S.rest('coach_push_sent', 'select=*&order=created_at.desc&limit=400') : Promise.resolve([])]).then(function (r) {
+      var cl = r[0] || [], subs = r[1] || [], byId = {}; cl.forEach(function (c) { byId[c.user_id] = c; });
+      if (tab === 'devices') {
+        var act = cl.filter(function (c) { return c.active; }), has = {};
+        subs.forEach(function (x) { (has[x.client_id] = has[x.client_id] || []).push(x); });
+        var on = act.filter(function (c) { return has[c.user_id]; }), off = act.filter(function (c) { return !has[c.user_id]; });
+        var dev = function (u) { u = u || ''; return /iPhone|iPad/.test(u) ? 'آيفون' : /Android/.test(u) ? 'أندرويد' : /Windows|Mac/.test(u) ? 'كمبيوتر' : 'جهاز'; };
+        var row = function (c, ok) { return '<a class="cl" href="#client/' + c.user_id + '"><div><div class="nm">' + esc(c.name) + ' <span class="tg ' + (isFree(c) ? 'fr' : 'pd') + '">' + (isFree(c) ? 'مجاني' : 'مدفوع') + '</span></div><div class="sub">' +
+          (ok ? has[c.user_id].map(function (x) { return dev(x.ua) + ' من ' + String(x.created_at).slice(0, 10); }).join('، ') : 'ما فعّل الإشعارات') + '</div></div><div class="sc ' + (ok ? 'green' : 'red') + '">' + (ok ? '✓' : '✗') + '</div></a>'; };
+        $('#main').innerHTML = tabs + '<div class="kpis"><div class="kpi"><b class="green">' + on.length + '</b><span>مفعّلين</span></div><div class="kpi"><b class="red">' + off.length + '</b><span>مو مفعّلين</span></div></div>' +
+          '<p class="muted">يلي مو مفعّل ما بيوصله ولا تذكير. لازم يفتح التطبيق من المتصفح (عالآيفون: Safari ثم «إضافة إلى الشاشة الرئيسية») ويقبل الإشعارات. تطبيق الـ APK عالأندرويد ما بيستقبل إشعارات، الأحسن يفتحوا الرابط من Chrome.</p>' +
+          (off.length ? '<h3>مو مفعّلين</h3><div class="list">' + off.map(function (c) { return row(c, false); }).join('') + '</div>' : '') +
+          (on.length ? '<h3>مفعّلين</h3><div class="list">' + on.map(function (c) { return row(c, true); }).join('') + '</div>' : '');
+        return;
+      }
+      var all = r[2] || [], fc = '', fk = '';
+      $('#main').innerHTML = tabs + '<div class="row" style="margin-bottom:10px;gap:8px"><select id="fc" class="input" style="flex:1"><option value="">كل المشتركين</option>' +
+        cl.map(function (c) { return '<option value="' + c.user_id + '">' + esc(c.name) + '</option>'; }).join('') + '</select><select id="fk" class="input" style="flex:1"><option value="">كل الأنواع</option>' +
+        ['morning', 'photos', 'night', 'test'].map(function (k) { return '<option value="' + k + '">' + NK[k] + '</option>'; }).join('') + '</select></div><div id="sstat" class="muted" style="margin-bottom:8px"></div><div class="list" id="slist"></div>';
+      function draw() {
+        var v = all.filter(function (x) { return (!fc || x.client_id === fc) && (!fk || nKind(x) === fk); });
+        var ok = v.filter(function (x) { return x.status === 'sent'; }).length;
+        $('#sstat').textContent = v.length ? v.length + ' إشعار · وصل ' + ok + ' · ما وصل ' + (v.length - ok) : '';
+        $('#slist').innerHTML = v.length ? v.map(function (x) {
+          var st = NST[x.status] || [x.status, 'muted'], c = byId[x.client_id];
+          return '<div class="cl" style="display:block"><div class="row" style="justify-content:space-between;align-items:center"><div class="nm">' + esc(c ? c.name : 'مشترك محذوف') + ' <span class="tg on">' + (NK[nKind(x)] || esc(x.kind)) + '</span></div><b class="' + st[1] + '" style="font-size:12px;flex:none">' + st[0] + '</b></div>' +
+            '<div class="sub" style="margin-top:4px">' + esc(x.title) + ' — ' + esc(x.body) + '</div><div class="muted" style="font-size:12px;margin-top:4px">' + dmTime(x.created_at) + '</div></div>';
+        }).join('') : '<div class="empty">' + (all.length ? 'ما في إشعارات بهالفلتر.' : 'لسا ما انبعت شي من وقت ما فعّلنا السجل. أول دفعة بكرا 7 الصبح.') + '</div>';
+      }
+      $('#fc').onchange = function () { fc = this.value; draw(); }; $('#fk').onchange = function () { fk = this.value; draw(); };
+      draw();
+    }).catch(fail);
   }
 
   /* ---------- templates ---------- */
