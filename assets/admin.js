@@ -32,6 +32,7 @@
     return S.rest('coaches', 'select=user_id&user_id=eq.' + S.a.uid).then(function (r) {
       if (!r || !r.length) { S.clear(); renderLogin('هالحساب مو حساب مدرب'); return; }
       route();
+      if ('Notification' in window && Notification.permission === 'granted') coachPush(false);
     });
   }
 
@@ -53,10 +54,29 @@
   window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
   function shell(active, body) {
     $('#app').innerHTML = '<div class="wrap wide"><div class="top"><div class="brand"><img src="../assets/img/logo.png" alt="GM"><div><b>لوحة التحكم</b><small>GM COACH</small></div></div>' +
-      '<button class="btn sm ghost" id="lo">خروج</button></div><nav class="nav">' +
+      '<div style="display:flex;gap:6px">' + ('Notification' in window && 'PushManager' in window ? '<button class="btn sm' + (Notification.permission === 'granted' ? ' gold' : ' ghost') + '" id="ntf" title="الإشعارات">🔔 ' + (Notification.permission === 'granted' ? 'مفعّلة' : 'فعّل الإشعارات') + '</button>' : '') +
+      '<button class="btn sm ghost" id="lo">خروج</button></div></div><nav class="nav">' +
       [['clients', 'المشتركين'], ['ex', 'مكتبة التمارين'], ['tpl', 'القوالب']].map(function (n) { return '<a href="#' + n[0] + '" class="' + (active === n[0] ? 'on' : '') + '">' + n[1] + '</a>'; }).join('') +
       '</nav><div id="main">' + body + '</div></div>';
     $('#lo').onclick = function () { S.clear(); renderLogin(); };
+    var nb = $('#ntf'); if (nb) nb.onclick = function () {
+      if (Notification.permission === 'denied') return G.toast('الإشعارات ممنوعة من إعدادات المتصفح لهالموقع، فعّلها من هنيك');
+      Notification.requestPermission().then(function (p) {
+        if (p !== 'granted') return G.toast('ما انسمح بالإشعارات');
+        nb.disabled = true;
+        return coachPush(true).then(function (ok) { nb.disabled = false; G.toast(ok ? 'تفعّلت ✓ رح يوصلك إشعار تجربة' : 'ما زبط التفعيل، جرّب من Chrome'); route(); });
+      });
+    };
+  }
+  function b64u(k) { var p = '='.repeat((4 - k.length % 4) % 4), r = atob((k + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) a[i] = r.charCodeAt(i); return a; }
+  function coachPush(test) {
+    if (!('PushManager' in window) || !navigator.serviceWorker || Notification.permission !== 'granted' || !S.a) return Promise.resolve(false);
+    return Promise.all([navigator.serviceWorker.register('sw.js', { scope: './' }).then(function () { return navigator.serviceWorker.ready; }), S.api('/functions/v1/coach-push')]).then(function (r) {
+      var reg = r[0], key = r[1] && r[1].publicKey; if (!key) return false;
+      return reg.pushManager.getSubscription().then(function (sub) { return sub || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(key) }); })
+        .then(function (sub) { var j = sub.toJSON(); return S.upsert('coach_coach_subs', { endpoint: j.endpoint, coach_id: S.a.uid, p256dh: j.keys.p256dh, auth: j.keys.auth, ua: navigator.userAgent.slice(0, 200) }, 'endpoint'); })
+        .then(function () { return test ? S.api('/functions/v1/coach-push', { method: 'POST', body: { kind: 'coach_test' } }) : null; }).then(function () { return true; });
+    }).catch(function () { return false; });
   }
   function loading(active) { shell(active, '<div class="spinner"></div>'); }
   function fail(e) { $('#main').innerHTML = '<div class="empty">' + esc(G.errText(e)) + '</div>'; }
