@@ -54,11 +54,12 @@
   window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
   function shell(active, body) {
     $('#app').innerHTML = '<div class="wrap wide"><div class="top"><div class="brand"><img src="../assets/img/logo.png" alt="GM"><div><b>لوحة التحكم</b><small>GM COACH</small></div></div>' +
-      '<div style="display:flex;gap:6px">' + ('Notification' in window && 'PushManager' in window ? '<button class="btn sm' + (Notification.permission === 'granted' ? ' gold' : ' ghost') + '" id="ntf" title="الإشعارات">🔔 ' + (Notification.permission === 'granted' ? 'مفعّلة' : 'فعّل الإشعارات') + '</button>' : '') +
+      '<div style="display:flex;gap:6px">' + ('Notification' in window && 'PushManager' in window ? '<button class="btn sm' + (Notification.permission === 'granted' ? ' gold' : ' ghost') + '" id="ntf" title="الإشعارات">🔔 ' + (Notification.permission === 'granted' ? 'مفعّلة' : 'فعّل الإشعارات') + '</button>' : '<button class="btn sm ghost" id="ntf-x">🔔 الإشعارات</button>') +
       '<button class="btn sm ghost" id="lo">خروج</button></div></div><nav class="nav">' +
       [['clients', 'المشتركين'], ['ex', 'مكتبة التمارين'], ['tpl', 'القوالب']].map(function (n) { return '<a href="#' + n[0] + '" class="' + (active === n[0] ? 'on' : '') + '">' + n[1] + '</a>'; }).join('') +
       '</nav><div id="main">' + body + '</div></div>';
     $('#lo').onclick = function () { S.clear(); renderLogin(); };
+    var nx = $('#ntf-x'); if (nx) nx.onclick = function () { G.toast('هالمتصفح ما بيدعم الإشعارات. افتح coach.georgemousa.com/admin من Chrome عالموبايل (مو من تطبيق APK)'); };
     var nb = $('#ntf'); if (nb) nb.onclick = function () {
       if (Notification.permission === 'denied') return G.toast('الإشعارات ممنوعة من إعدادات المتصفح لهالموقع، فعّلها من هنيك');
       Notification.requestPermission().then(function (p) {
