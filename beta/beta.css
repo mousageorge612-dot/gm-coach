@@ -22,3 +22,4 @@
 .celebrate b{display:block;font-size:22px;font-weight:900}.celebrate span{display:block;font-size:14px;direction:ltr}
 .celebrate.out{transition:opacity .5s,transform .5s;opacity:0!important;transform:translate(-50%,-60%) scale(.9)!important}
 @keyframes pop{to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+.lnk{background:none;border:0;color:var(--y,#ffb800);font:inherit;font-weight:700;text-decoration:underline;padding:0;cursor:pointer}

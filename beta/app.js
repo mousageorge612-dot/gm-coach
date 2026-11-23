@@ -120,7 +120,7 @@
     while (n < 400 && logged(d)) { n++; d = G.addDays(d, -1); }
     return n;
   }
-  function missedTwiceRisk() { var t = G.today(); return !logged(t) && !logged(G.addDays(t, -1)) && Object.keys(D.checkins).length > 0; }
+  function missedTwiceRisk() { var t = G.today(), y = G.addDays(t, -1); return !logged(t) && !logged(y) && (D.checkins[y] || {}).postpone == null && Object.keys(D.checkins).length > 0; }
 
   /* ---------- TODAY ---------- */
   function greet() { var h = new Date().getHours(); return h < 12 ? 'صباح الخير' : h < 18 ? 'نهارك سعيد' : 'مسا الخير'; }
@@ -135,13 +135,21 @@
     // workout
     var ds = days(), ti = ds.length ? todayIdx() : -1;
     if (ds.length) {
-      if (ti >= 0) {
+      var mi = movedIn(), si = schedIdx();
+      if (c.postpone != null && ds[+c.postpone]) {
+        h += '<div class="card"><div class="muted" style="font-size:12.5px">تمرين اليوم</div><b style="font-size:17px">أجّلت ' + esc(ds[+c.postpone].title || 'التمرين') + ' لبكرا ⏭</b>' +
+          '<div class="muted" style="font-size:13px;margin-top:2px">ولا يهمك، بكرا بيطلعلك أول شي. ارتاح منيح واشرب مي.</div>' +
+          '<button class="btn block" style="margin-top:10px" id="pp-undo">↩ لا، رح اتمرّن اليوم</button></div>';
+      } else if (ti >= 0) {
         var d = ds[ti], items = d.items || [], lg = logsOn(t), done = 0;
         items.forEach(function (it, i) { var e = effEx(it, ti, i); if ((lg[e.id] || []).some(function (s) { return s && (s.w || s.r || s.t); })) done++; });
         var pct = items.length ? Math.round(done / items.length * 100) : 0;
-        h += '<div class="card"><div class="row"><div><div class="muted" style="font-size:12.5px">تمرين اليوم</div><b style="font-size:17px">' + esc(d.title || '') + '</b></div>' +
+        h += '<div class="card"><div class="row"><div><div class="muted" style="font-size:12.5px">تمرين اليوم' + (ti === mi && !c.useOrig ? ' • مأجّل من مبارح' : '') + '</div><b style="font-size:17px">' + esc(d.title || '') + '</b></div>' +
           '<span class="pill ' + (pct === 100 ? 'g' : 'y') + '" style="flex:0 0 auto">' + done + ' / ' + items.length + '</span></div>' + bar(pct) +
-          '<button class="btn gold block" style="margin-top:10px" data-go="train" data-di="' + ti + '">' + (pct === 100 ? 'خلصت تمرين اليوم ✓ شوفه' : done ? 'كمّل التمرين' : 'ابدأ التمرين') + '</button></div>';
+          (mi >= 0 && si >= 0 && si !== mi && !done ? '<div class="muted" style="font-size:13px;margin-top:8px">' + (c.useOrig ? 'رجعت لتمرين اليوم الأصلي بدل يلي أجّلته مبارح.' : 'كان عندك اليوم ' + esc(ds[si].title || '') + '.') +
+            ' <button class="lnk" id="pp-orig">' + (c.useOrig ? 'رجّعني للمأجّل' : 'بدّي اعمل الأصلي') + '</button></div>' : '') +
+          '<button class="btn gold block" style="margin-top:10px" data-go="train" data-di="' + ti + '">' + (pct === 100 ? 'خلصت تمرين اليوم ✓ شوفه' : done ? 'كمّل التمرين' : 'ابدأ التمرين') + '</button>' +
+          (!done ? '<button class="swapb" id="pp-do" data-pi="' + ti + '">⏭ ما بقدر اليوم؟ أجّل التمرين لبكرا</button>' : '') + '</div>';
       } else {
         var r = rotation(), ni = r ? nextIdx() : -1;
         h += '<div class="card"><b>اليوم يوم راحة 😌</b><div class="muted" style="font-size:13.5px;margin-top:2px">' + (ni >= 0 && ds[ni] ? 'تمرينك الجاي: ' + esc(ds[ni].title || '') + '. ' : '') + 'امشي شوي، اشرب مي، ونام منيح.</div></div>';
@@ -347,7 +355,15 @@
     return n;
   }
   function nextIdx() { var r = rotation(), t = G.today(); if (!r || t < r.start) return r ? 0 : -1; return sessionsBefore(r, G.addDays(t, 1)) % days().length; }
+  /* postpone: checkins[day].postpone = index of the workout moved to the next day.
+     Tomorrow that workout becomes "today's" workout; useOrig switches back to the scheduled one. */
+  function movedIn() { var y = D.checkins[G.addDays(G.today(), -1)], ds = days(); return y && y.postpone != null && ds[+y.postpone] ? +y.postpone : -1; }
   function todayIdx() {
+    var mi = movedIn(), c = D.checkins[G.today()] || {};
+    if (mi >= 0 && !c.useOrig) return mi;
+    return schedIdx();
+  }
+  function schedIdx() {
     var wd = new Date().getDay(), ds = days(), r = rotation();
     if (r) { var t = G.today(); return (t >= r.start && r.weekdays.indexOf(wd) >= 0) ? sessionsBefore(r, t) % ds.length : -1; }
     for (var i = 0; i < ds.length; i++) if ((ds[i].weekdays || []).indexOf(wd) >= 0) return i;
@@ -511,6 +527,15 @@
     var t = G.today(), c = todayC();
     if (c.train) { saveCheckin(t, true); return; }
     c.train = 'yes'; saveCheckin(t, true);
+  }
+  function postponeSheet(di) {
+    var d = days()[di] || {}, tm = G.parseD(G.addDays(G.today(), 1)).getDay();
+    G.sheet('<div class="h2">أجّل ' + esc(d.title || 'التمرين') + ' لبكرا؟</div>' +
+      '<p class="muted" style="font-size:13.5px;margin:0 0 10px">بكرا (' + G.WD[tm] + ') بيطلعلك هالتمرين أول شي. إذا كان عندك بكرا تمرين تاني، فيك تختار الأصلي من شاشة اليوم.<br>التأجيل مرة بالأسبوع طبيعي، المهم ما يصير عادة 💪</p>' +
+      '<button class="btn gold block" id="pp-ok">أجّل لبكرا</button><button class="btn block" style="margin-top:8px" id="pp-no">لا، رح اتمرّن</button>', function (b) {
+      $('#pp-ok', b).onclick = function () { var c = todayC(); c.postpone = di; delete c.useOrig; saveCheckin(G.today(), true); G.closeSheet(); G.toast('تأجّل لبكرا ✓'); render(); };
+      $('#pp-no', b).onclick = G.closeSheet;
+    });
   }
   function swapSheet(key) {
     var p = key.split('-'), di = +p[0], i = +p[1], it = days()[di].items[i], orig = D.ex[it.ex] || {}, c = todayC(), cur = c.swaps && c.swaps[key];
@@ -695,6 +720,9 @@
     var opa = $('#op-add'); if (opa) opa.onclick = offplanSheet;
     $$('[data-opdel]').forEach(function (b) { b.onclick = function () { var c = todayC(); c.offplan = offList(c).filter(function (_, i) { return i !== +b.getAttribute('data-opdel'); }); saveCheckin(G.today(), true); render(); }; });
     var wk = $('#wk-open'); if (wk) wk.onclick = weeklySheet;
+    var ppd = $('#pp-do'); if (ppd) ppd.onclick = function () { postponeSheet(+ppd.getAttribute('data-pi')); };
+    var ppu = $('#pp-undo'); if (ppu) ppu.onclick = function () { var c = todayC(); delete c.postpone; saveCheckin(G.today(), true); render(); };
+    var ppo = $('#pp-orig'); if (ppo) ppo.onclick = function () { var c = todayC(); if (c.useOrig) delete c.useOrig; else c.useOrig = true; dayIdx = null; saveCheckin(G.today(), true); render(); };
     $$('[data-wa]').forEach(function (b) { b.onclick = function () { addWater(parseFloat(b.getAttribute('data-wa'))); }; });
     $$('[data-ck]').forEach(function (b) { b.onclick = function () { var c = todayC(); c[b.getAttribute('data-ck')] = b.getAttribute('data-v'); $$('[data-ck="' + b.getAttribute('data-ck') + '"]').forEach(function (x) { x.classList.toggle('on', x === b); }); autoSave(); }; });
     [['ck-w', 'weight'], ['ck-waist', 'waist'], ['ck-note', 'note']].forEach(function (f) { var el = $('#' + f[0]); if (el) el.oninput = function () { var c = todayC(); c[f[1]] = el.value.trim(); autoSave(); }; });
