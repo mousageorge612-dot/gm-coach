@@ -433,6 +433,7 @@
     return rows.map(function (l) { var b = bestOf(l.sets, timed); return { day: l.day, sets: (l.sets || []).filter(function (x) { return x && (x.w || x.r || x.t); }), top: b.s, v: b.v, timed: timed }; })
       .sort(function (a, b) { return a.day < b.day ? -1 : 1; });
   }
+  function sd(st) { return st && st.t ? 'rtl' : 'ltr'; }
   function topVal(h) { return h.timed ? (parseFloat(h.top && h.top.t) || 0) : (parseFloat(h.top && h.top.w) || 0); }
   function histSheet(exId) {
     var e = D.ex[exId] || {}, hs = histOf(exId); if (!hs.length) return;
@@ -441,13 +442,13 @@
     var trend = hs.length < 2 ? 'أول مرة سجّلت هالتمرين. كمّل وبتشوف تطوّرك هون.' :
       d > 0 ? 'طلعت ' + (Math.round(d * 10) / 10) + ' ' + unit + ' من أول مرة 💪' : d < 0 ? 'نزلت ' + (Math.round(-d * 10) / 10) + ' ' + unit + ' عن أول مرة. عادي، ركّز عالتكنيك وارجع ارفع تدريجياً.' : 'نفس الوزن من أول مرة. جرّب تزيد شوي أو تزيد عدّة.';
     var h = '<div class="h2">' + esc(e.name_ar || 'التمرين') + '</div>' + (e.name_en ? '<div class="nmen" style="margin-top:-6px;margin-bottom:8px">' + esc(e.name_en) + '</div>' : '') +
-      '<div class="wk" style="grid-template-columns:repeat(3,1fr)"><div><b dir="ltr">' + fmtSet(first.top) + '</b><span>أول مرة</span></div><div><b dir="ltr">' + fmtSet(last.top) + '</b><span>آخر مرة</span></div><div><b dir="ltr">' + fmtSet(best.top) + '</b><span>🏆 أفضل رقم</span></div></div>' +
+      '<div class="wk" style="grid-template-columns:repeat(3,1fr)"><div><b dir="' + sd(first.top) + '">' + fmtSet(first.top) + '</b><span>أول مرة</span></div><div><b dir="' + sd(last.top) + '">' + fmtSet(last.top) + '</b><span>آخر مرة</span></div><div><b dir="' + sd(best.top) + '">' + fmtSet(best.top) + '</b><span>🏆 أفضل رقم</span></div></div>' +
       '<div class="muted" style="font-size:13.5px;margin:8px 0 2px">' + trend + '</div>' +
       spark(hs.map(function (x) { return [x.day, Math.round(x.v * 10) / 10]; })) +
       (hs.length > 1 ? '<div class="muted" style="font-size:11.5px">الخط = أقوى جولة بكل مرة (الوزن والعدّات مع بعض).</div>' : '') +
       '<div class="hl">' + hs.slice().reverse().map(function (x) {
         return '<div class="hi"><div class="row"><b dir="ltr">' + esc(x.day) + '</b>' + (x === best && hs.length > 1 ? '<span class="pill y" style="flex:0 0 auto">🏆 أفضل</span>' : '') + '</div>' +
-          '<div class="hs">' + x.sets.map(function (st) { return '<span dir="ltr"' + (st === x.top ? ' class="top"' : '') + '>' + fmtSet(st) + '</span>'; }).join('') + '</div></div>';
+          '<div class="hs">' + x.sets.map(function (st) { return '<span dir="' + sd(st) + '"' + (st === x.top ? ' class="top"' : '') + '>' + fmtSet(st) + '</span>'; }).join('') + '</div></div>';
       }).join('') + '</div>';
     G.sheet(h, function () {});
   }
@@ -460,7 +461,7 @@
       rows.map(function (r) {
         var f = r.hs[0], l = r.hs[r.hs.length - 1], d = topVal(l) - topVal(f), cls = d > 0 ? 'green' : d < 0 ? 'red' : '';
         return '<button class="li" data-hist="' + r.id + '"><span class="ln">' + esc(D.ex[r.id].name_ar) + '<small>' + r.hs.length + ' ' + (r.hs.length === 1 ? 'مرة' : 'مرات') + '</small></span>' +
-          '<span class="lv"><span><bdi dir="ltr">' + fmtSet(f.top) + '</bdi> ← <bdi dir="ltr">' + fmtSet(l.top) + '</bdi></span>' + (r.hs.length > 1 && d ? '<b class="' + cls + '">' + (d > 0 ? '▲ ' : '▼ ') + Math.round(Math.abs(d) * 10) / 10 + ' ' + (f.timed ? 'ث' : 'كغ') + '</b>' : '') + '</span></button>';
+          '<span class="lv"><span><bdi dir="' + sd(f.top) + '">' + fmtSet(f.top) + '</bdi> ← <bdi dir="' + sd(l.top) + '">' + fmtSet(l.top) + '</bdi></span>' + (r.hs.length > 1 && d ? '<b class="' + cls + '">' + (d > 0 ? '▲ ' : '▼ ') + Math.round(Math.abs(d) * 10) / 10 + ' ' + (f.timed ? 'ث' : 'كغ') + '</b>' : '') + '</span></button>';
       }).join('') + '</div>';
   }
   function setsForm(id, n, cur, timed, best) {
