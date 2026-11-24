@@ -23,3 +23,12 @@
 .celebrate.out{transition:opacity .5s,transform .5s;opacity:0!important;transform:translate(-50%,-60%) scale(.9)!important}
 @keyframes pop{to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 .lnk{background:none;border:0;color:var(--y,#ffb800);font:inherit;font-weight:700;text-decoration:underline;padding:0;cursor:pointer}
+.hl{margin-top:10px;display:flex;flex-direction:column;gap:8px;max-height:45vh;overflow:auto}
+.hi{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:8px 10px}
+.hs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;direction:ltr;justify-content:flex-end}
+.hs span{background:rgba(255,255,255,.06);border-radius:8px;padding:3px 8px;font-size:13px}
+.hs span.top{background:#ffb800;color:#000;font-weight:700}
+.li{display:flex;justify-content:space-between;align-items:center;width:100%;gap:8px;background:none;border:0;border-top:1px solid rgba(255,255,255,.08);color:inherit;font:inherit;padding:10px 0;text-align:right;cursor:pointer}
+.li .ln{display:flex;flex-direction:column;font-weight:700}.li small{font-weight:400;opacity:.6;font-size:12px}
+.li .lv{display:flex;flex-direction:column;align-items:flex-start;font-size:13px}.li .lv b{font-size:12.5px}
+.red{color:#ff5a5a}
