@@ -415,11 +415,12 @@
     if (openLog[e.id]) h += setsForm(e.id, parseInt(it.sets, 10) || 3, dayLogs[e.id] || [], isTimed(it), best);
     return h + '</div></div>';
   }
+  function N(x) { return parseFloat(String(x == null ? '' : x).replace(/[\u0660-\u0669]/g, function (d) { return d.charCodeAt(0) - 0x660; }).replace(/[\u06F0-\u06F9]/g, function (d) { return d.charCodeAt(0) - 0x6F0; }).replace(/[٫,]/, '.')) || 0; }
   function isTimed(it) { return /\d\s*ث|ثاني|ثوان|دقيق|sec|min/i.test(String(it.reps || '')); }
   function fmtSet(s) { return s.t ? s.t + ' ث' : (s.w || '-') + '×' + (s.r || '-'); }
   /* personal record: best estimated 1RM (Epley w*(1+r/30)); for weightless sets, most reps; for timed, longest hold */
   function setScore(s, timed) {
-    if (!s) return 0; var w = parseFloat(s.w) || 0, r = parseFloat(s.r) || 0, t = parseFloat(s.t) || 0;
+    if (!s) return 0; var w = N(s.w), r = N(s.r), t = N(s.t);
     if (timed) return t;
     if (w > 0 && r > 0) return w * (1 + r / 30);
     return r > 0 ? r / 1000 : 0; // bodyweight reps rank below any loaded set
@@ -434,7 +435,7 @@
       .sort(function (a, b) { return a.day < b.day ? -1 : 1; });
   }
   function sd(st) { return st && st.t ? 'rtl' : 'ltr'; }
-  function topVal(h) { return h.timed ? (parseFloat(h.top && h.top.t) || 0) : (parseFloat(h.top && h.top.w) || 0); }
+  function topVal(h) { return h.timed ? N(h.top && h.top.t) : N(h.top && h.top.w); }
   function histSheet(exId) {
     var e = D.ex[exId] || {}, hs = histOf(exId); if (!hs.length) return;
     var first = hs[0], last = hs[hs.length - 1], best = hs.reduce(function (a, b) { return b.v > a.v ? b : a; }, hs[0]);
@@ -631,7 +632,7 @@
       h += '<div style="margin-bottom:10px"><div style="font-weight:700;margin-bottom:6px">' + q[1] + '</div><div class="chips" style="margin:0;flex-wrap:wrap">' +
         q[2].map(function (o) { return '<button class="chip' + (String(c[q[0]]) === o[0] ? ' on' : '') + '" data-ck="' + q[0] + '" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>';
     });
-    h += waterBox(c);
+    h += waterSlider(c);
     h += '<div class="grid2"><label class="field"><span>الوزن (كغ) اختياري</span><input class="input" id="ck-w" inputmode="decimal" value="' + esc(c.weight || '') + '"></label>' +
       '<label class="field"><span>الخصر (سم) اختياري</span><input class="input" id="ck-waist" inputmode="decimal" value="' + esc(c.waist || '') + '"></label></div>' +
       '<label class="field"><span>ملاحظة للكوتش</span><textarea class="input" id="ck-note" rows="2">' + esc(c.note || '') + '</textarea></label>' +
@@ -672,6 +673,18 @@
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 44px;gap:6px">' +
       [['0.25', '+ كاسة', '250 مل'], ['0.5', '+ قنينة', '500 مل'], ['1', '+ لتر', '1000 مل']].map(function (x) { return '<button class="btn sm gold" data-wa="' + x[0] + '" style="flex-direction:column;gap:0;padding:7px 4px;min-width:0;white-space:normal;line-height:1.25"><span>' + x[1] + '</span><small style="font-weight:400;font-size:11px">' + x[2] + '</small></button>'; }).join('') +
       '<button class="btn sm" data-wa="-0.25" style="padding:0;font-size:20px" aria-label="ناقص كاسة">−</button></div></div>';
+  }
+  /* progress tab: one slider in 250 ml steps instead of the add buttons */
+  function waterSlider(c) {
+    var tg = waterTarget(), w = parseFloat(c.water) || 0, mx = Math.max(Math.ceil((tg + 1.5) * 4) / 4, w);
+    return '<div style="margin-bottom:12px;padding:10px;border:1px solid #2a2a2a;border-radius:12px"><div id="wbox">' + waterInner(c) + '</div>' +
+      '<input type="range" class="wsl" id="wsl" min="0" max="' + mx + '" step="0.25" value="' + w + '" aria-label="كمية المي باللتر" style="--p:' + Math.round(w / mx * 100) + '%">' +
+      '<div class="row muted" style="font-size:12px;direction:ltr;margin-top:2px"><span>0</span><span>' + fmtL(tg) + ' L 🎯</span><span>' + fmtL(mx) + ' L</span></div></div>';
+  }
+  function setWater(v) {
+    var c = todayC(); c.water = fmtL(Math.max(0, Math.min(10, v)));
+    var b = $('#wbox'); if (b) b.innerHTML = waterInner(c);
+    autoSave();
   }
   var wTimer;
   function autoSave() { var t = G.today(); saveCache(); clearTimeout(wTimer); wTimer = setTimeout(function () { wTimer = null; saveCheckin(t, true); }, 1200); }
@@ -765,6 +778,7 @@
     var ppu = $('#pp-undo'); if (ppu) ppu.onclick = function () { var c = todayC(); delete c.postpone; saveCheckin(G.today(), true); render(); };
     var ppo = $('#pp-orig'); if (ppo) ppo.onclick = function () { var c = todayC(); if (c.useOrig) delete c.useOrig; else c.useOrig = true; dayIdx = null; saveCheckin(G.today(), true); render(); };
     $$('[data-wa]').forEach(function (b) { b.onclick = function () { addWater(parseFloat(b.getAttribute('data-wa'))); }; });
+    var wsl = $('#wsl'); if (wsl) { var last = wsl.value; wsl.oninput = function () { wsl.style.setProperty('--p', Math.round(wsl.value / wsl.max * 100) + '%'); if (wsl.value !== last && navigator.vibrate) try { navigator.vibrate(8); } catch (e) {} last = wsl.value; setWater(parseFloat(wsl.value)); }; }
     $$('[data-ck]').forEach(function (b) { b.onclick = function () { var c = todayC(); c[b.getAttribute('data-ck')] = b.getAttribute('data-v'); $$('[data-ck="' + b.getAttribute('data-ck') + '"]').forEach(function (x) { x.classList.toggle('on', x === b); }); autoSave(); }; });
     [['ck-w', 'weight'], ['ck-waist', 'waist'], ['ck-note', 'note']].forEach(function (f) { var el = $('#' + f[0]); if (el) el.oninput = function () { var c = todayC(); c[f[1]] = el.value.trim(); autoSave(); }; });
     var phEl = $('#photos'); if (phEl) G.photosUI(S, S.a.uid, phEl);
