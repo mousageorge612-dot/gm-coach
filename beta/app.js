@@ -43,7 +43,7 @@
       var ids = [], tc = n.checkins[G.today()] || {};
       if (n.training && n.training.data && n.training.data.days) n.training.data.days.forEach(function (d) { (d.items || []).forEach(function (it) { if (it.ex && ids.indexOf(it.ex) < 0) ids.push(it.ex); }); });
       Object.keys(tc.swaps || {}).forEach(function (k) { var v = tc.swaps[k]; if (v && ids.indexOf(v) < 0) ids.push(v); });
-      n.logs.forEach(function (l) { if (ids.indexOf(l.exercise_id) < 0 && l.day === G.today()) ids.push(l.exercise_id); });
+      n.logs.forEach(function (l) { if (ids.indexOf(l.exercise_id) < 0) ids.push(l.exercise_id); });
       var q = ids.length ? S.rest('coach_exercises', 'select=*&id=in.(' + ids.join(',') + ')') : Promise.resolve([]);
       return q.then(function (ex) { (ex || []).forEach(function (e) { n.ex[e.id] = e; }); D = n; saveCache(); render(); });
     }).catch(function (e) {
@@ -410,6 +410,7 @@
       '<div class="acts">' + (vid ? '<a class="btn gold" target="_blank" rel="noopener" href="' + esc(vid) + '">▶ الشرح</a>' : '') +
       '<button class="btn" data-log="' + e.id + '">' + (logged_ ? '✓ مسجّل' : isTimed(it) ? 'سجّل المدة' : 'سجّل أوزانك') + '</button>' +
       (restSecs(it.rest) ? '<button class="btn tm" data-rest="' + restSecs(it.rest) + '" aria-label="مؤقت الراحة">⏱</button>' : '') + '</div>' +
+      (histOf(e.id).length ? '<button class="swapb" data-hist="' + e.id + '">📈 أوزانك السابقة بهالتمرين</button>' : '') +
       '<button class="swapb" data-swap="' + dayIdx + '-' + i + '">↔ الجهاز مشغول؟ بدّل التمرين لليوم</button>';
     if (openLog[e.id]) h += setsForm(e.id, parseInt(it.sets, 10) || 3, dayLogs[e.id] || [], isTimed(it), best);
     return h + '</div></div>';
@@ -425,6 +426,44 @@
   }
   function bestOf(sets, timed) { var b = 0, bs = null; (sets || []).forEach(function (s) { var v = setScore(s, timed); if (v > b) { b = v; bs = s; } }); return { v: b, s: bs }; }
   function bestBefore(exId, timed) { var t = G.today(), b = { v: 0, s: null, day: null }; D.logs.forEach(function (l) { if (l.exercise_id === exId && l.day < t) { var x = bestOf(l.sets, timed); if (x.v > b.v) { b = x; b.day = l.day; } } }); return b; }
+  /* weight history per exercise: every logged session (oldest first) with its top set */
+  function histOf(exId) {
+    var rows = D.logs.filter(function (l) { return l.exercise_id === exId && (l.sets || []).some(function (x) { return x && (x.w || x.r || x.t); }); });
+    var timed = rows.some(function (l) { return (l.sets || []).some(function (x) { return x && x.t; }); });
+    return rows.map(function (l) { var b = bestOf(l.sets, timed); return { day: l.day, sets: (l.sets || []).filter(function (x) { return x && (x.w || x.r || x.t); }), top: b.s, v: b.v, timed: timed }; })
+      .sort(function (a, b) { return a.day < b.day ? -1 : 1; });
+  }
+  function sd(st) { return st && st.t ? 'rtl' : 'ltr'; }
+  function topVal(h) { return h.timed ? (parseFloat(h.top && h.top.t) || 0) : (parseFloat(h.top && h.top.w) || 0); }
+  function histSheet(exId) {
+    var e = D.ex[exId] || {}, hs = histOf(exId); if (!hs.length) return;
+    var first = hs[0], last = hs[hs.length - 1], best = hs.reduce(function (a, b) { return b.v > a.v ? b : a; }, hs[0]);
+    var unit = first.timed ? 'ث' : 'كغ', d = topVal(last) - topVal(first);
+    var trend = hs.length < 2 ? 'أول مرة سجّلت هالتمرين. كمّل وبتشوف تطوّرك هون.' :
+      d > 0 ? 'طلعت ' + (Math.round(d * 10) / 10) + ' ' + unit + ' من أول مرة 💪' : d < 0 ? 'نزلت ' + (Math.round(-d * 10) / 10) + ' ' + unit + ' عن أول مرة. عادي، ركّز عالتكنيك وارجع ارفع تدريجياً.' : 'نفس الوزن من أول مرة. جرّب تزيد شوي أو تزيد عدّة.';
+    var h = '<div class="h2">' + esc(e.name_ar || 'التمرين') + '</div>' + (e.name_en ? '<div class="nmen" style="margin-top:-6px;margin-bottom:8px">' + esc(e.name_en) + '</div>' : '') +
+      '<div class="wk" style="grid-template-columns:repeat(3,1fr)"><div><b dir="' + sd(first.top) + '">' + fmtSet(first.top) + '</b><span>أول مرة</span></div><div><b dir="' + sd(last.top) + '">' + fmtSet(last.top) + '</b><span>آخر مرة</span></div><div><b dir="' + sd(best.top) + '">' + fmtSet(best.top) + '</b><span>🏆 أفضل رقم</span></div></div>' +
+      '<div class="muted" style="font-size:13.5px;margin:8px 0 2px">' + trend + '</div>' +
+      spark(hs.map(function (x) { return [x.day, Math.round(x.v * 10) / 10]; })) +
+      (hs.length > 1 ? '<div class="muted" style="font-size:11.5px">الخط = أقوى جولة بكل مرة (الوزن والعدّات مع بعض).</div>' : '') +
+      '<div class="hl">' + hs.slice().reverse().map(function (x) {
+        return '<div class="hi"><div class="row"><b dir="ltr">' + esc(x.day) + '</b>' + (x === best && hs.length > 1 ? '<span class="pill y" style="flex:0 0 auto">🏆 أفضل</span>' : '') + '</div>' +
+          '<div class="hs">' + x.sets.map(function (st) { return '<span dir="' + sd(st) + '"' + (st === x.top ? ' class="top"' : '') + '>' + fmtSet(st) + '</span>'; }).join('') + '</div></div>';
+      }).join('') + '</div>';
+    G.sheet(h, function () {});
+  }
+  function liftsCard() {
+    var ids = []; D.logs.forEach(function (l) { if (ids.indexOf(l.exercise_id) < 0 && D.ex[l.exercise_id]) ids.push(l.exercise_id); });
+    var rows = ids.map(function (id) { return { id: id, hs: histOf(id) }; }).filter(function (r) { return r.hs.length; })
+      .sort(function (a, b) { return a.hs[a.hs.length - 1].day < b.hs[b.hs.length - 1].day ? 1 : -1; });
+    if (!rows.length) return '';
+    return '<div class="card"><b>تطوّر أوزانك 🏋️</b><div class="muted" style="font-size:13px;margin:2px 0 8px">من أول مرة لآخر مرة بكل تمرين. اكبس على التمرين لتشوف كل أوزانك السابقة.</div>' +
+      rows.map(function (r) {
+        var f = r.hs[0], l = r.hs[r.hs.length - 1], d = topVal(l) - topVal(f), cls = d > 0 ? 'green' : d < 0 ? 'red' : '';
+        return '<button class="li" data-hist="' + r.id + '"><span class="ln">' + esc(D.ex[r.id].name_ar) + '<small>' + r.hs.length + ' ' + (r.hs.length === 1 ? 'مرة' : 'مرات') + '</small></span>' +
+          '<span class="lv"><span><bdi dir="' + sd(f.top) + '">' + fmtSet(f.top) + '</bdi> ← <bdi dir="' + sd(l.top) + '">' + fmtSet(l.top) + '</bdi></span>' + (r.hs.length > 1 && d ? '<b class="' + cls + '">' + (d > 0 ? '▲ ' : '▼ ') + Math.round(Math.abs(d) * 10) / 10 + ' ' + (f.timed ? 'ث' : 'كغ') + '</b>' : '') + '</span></button>';
+      }).join('') + '</div>';
+  }
   function setsForm(id, n, cur, timed, best) {
     var last = lastLog(id), h = '<div class="sets" data-sets="' + id + '" data-timed="' + (timed ? 1 : 0) + '"><div class="set"><span></span>' + (timed ? '<span class="lbl" style="grid-column:span 2">المدة (ثانية)</span>' : '<span class="lbl">الوزن (كغ)</span><span class="lbl">العدّات</span>') + '</div>';
     n = Math.max(n, cur.length);
@@ -602,6 +641,7 @@
     for (var i = 13; i >= 0; i--) { var d = G.addDays(t, -i), x = D.checkins[d]; dots += '<i title="' + d + '" style="width:18px;height:18px;border-radius:5px;display:block;background:' + (x && logged(d) ? score(x) >= 75 ? 'var(--green)' : score(x) >= 50 ? 'var(--gold)' : 'var(--red)' : '#222') + '"></i>'; }
     h += '<div class="card"><b>آخر 14 يوم</b><div style="display:flex;gap:4px;direction:ltr;justify-content:space-between;margin-top:8px">' + dots + '</div></div>';
     h += weightCard();
+    h += liftsCard();
     h += '<div class="card"><b>صور التقدم</b><div id="photos"></div></div>';
     return h;
   }
@@ -720,6 +760,7 @@
     var opa = $('#op-add'); if (opa) opa.onclick = offplanSheet;
     $$('[data-opdel]').forEach(function (b) { b.onclick = function () { var c = todayC(); c.offplan = offList(c).filter(function (_, i) { return i !== +b.getAttribute('data-opdel'); }); saveCheckin(G.today(), true); render(); }; });
     var wk = $('#wk-open'); if (wk) wk.onclick = weeklySheet;
+    $$('[data-hist]').forEach(function (b) { b.onclick = function () { histSheet(+b.getAttribute('data-hist')); }; });
     var ppd = $('#pp-do'); if (ppd) ppd.onclick = function () { postponeSheet(+ppd.getAttribute('data-pi')); };
     var ppu = $('#pp-undo'); if (ppu) ppu.onclick = function () { var c = todayC(); delete c.postpone; saveCheckin(G.today(), true); render(); };
     var ppo = $('#pp-orig'); if (ppo) ppo.onclick = function () { var c = todayC(); if (c.useOrig) delete c.useOrig; else c.useOrig = true; dayIdx = null; saveCheckin(G.today(), true); render(); };
