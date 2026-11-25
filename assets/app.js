@@ -57,7 +57,7 @@
     $('#app').innerHTML = '<form class="login" id="lf"><img class="logo" src="' + IMG + 'logo.png" alt="GM"><h1 class="h1">أهلاً فيك</h1><div class="sub">GM COACH</div>' +
       '<label class="field"><span>اسم المستخدم</span><input class="input" name="u" autocomplete="username" autocapitalize="none" dir="ltr" required></label>' +
       '<label class="field"><span>كلمة المرور</span><input class="input" name="p" type="password" autocomplete="current-password" dir="ltr" required></label>' +
-      '<button class="btn gold block" type="submit">دخول</button><p class="muted" style="text-align:center;font-size:13px;margin-top:14px">هي نسخة تجريبية. بيانات الدخول نفسها يلي بالتطبيق الأساسي.</p></form>';
+      '<button class="btn gold block" type="submit">دخول</button><p class="muted" style="text-align:center;font-size:13px;margin-top:14px">اسم المستخدم وكلمة المرور بيبعتلك ياهن الكوتش.</p></form>';
     $('#lf').onsubmit = function (e) {
       e.preventDefault(); var f = e.target, b = f.querySelector('button'); b.disabled = true;
       var u = f.u.value.trim().toLowerCase(), p = f.p.value;
