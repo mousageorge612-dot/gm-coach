@@ -1,5 +1,5 @@
 /* GM Coach BETA service worker (scope /beta/ only). Network-first shell, images cache-first, API never cached. */
-var V = 'gmb-v4', IMG = 'gmb-img-v1';
+var V = 'gmb-v5', IMG = 'gmb-img-v1';
 var SHELL = ['./', 'index.html', 'beta.css?v=1', 'core.js?v=1', 'foods.js?v=1', 'app.js?v=1', '../assets/styles.css?v=3', '../assets/img/logo.png', '../assets/img/icon-192.png'];
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(V).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });
 self.addEventListener('activate', function (e) {

@@ -225,10 +225,11 @@
   }
   function gSwap(i, cur) {
     var e = exById(cur) || {}, list = (EX || []).filter(function (x) { return x.id !== cur; });
-    var draw = function (q) { var L = list.filter(function (x) { return q ? (x.name_ar + ' ' + (x.name_en || '')).toLowerCase().indexOf(q.toLowerCase()) >= 0 : x.muscle === e.muscle; }).slice(0, 40);
+    var same = e.pattern ? list.filter(function (x) { return x.pattern === e.pattern; }) : [];
+    var draw = function (q) { var L = q ? list.filter(function (x) { return (x.name_ar + ' ' + (x.name_en || '')).toLowerCase().indexOf(q.toLowerCase()) >= 0; }) : same.length ? same : list.filter(function (x) { return x.muscle === e.muscle; }); L = L.slice(0, 40);
       return L.map(function (x) { return '<button class="btn ghost block" style="text-align:right;margin-bottom:6px" data-pick="' + x.id + '">' + esc(x.name_ar) + ' <small class="muted">' + esc(x.equipment || '') + '</small></button>'; }).join('') || '<div class="empty">ما في نتائج.</div>'; };
     G.sheet('<h3 class="h3">بدّل «' + esc(e.name_ar || 'التمرين') + '» لليوم بس</h3><p class="muted" style="font-size:13px">مثلاً إذا الجهاز مشغول. الخطة الأصلية ما بتتغيّر، والمشترك بيشوف البديل بتطبيقه اليوم.</p>' +
-      '<input class="input" id="gq" placeholder="دوّر على تمرين تاني..." style="margin-bottom:10px">' + (GYM.swaps[GYM.di + '-' + i] ? '<button class="btn sm danger" id="gsr" style="margin-bottom:10px">رجّع التمرين الأصلي</button>' : '') + '<div id="gl">' + draw('') + '</div>', function () {
+      (same.length ? '<p class="muted" style="font-size:12.5px;margin:0 0 8px">بدائل بنفس الحركة. بدك شي تاني؟ دوّر بالاسم.</p>' : '') + '<input class="input" id="gq" placeholder="دوّر على تمرين تاني..." style="margin-bottom:10px">' + (GYM.swaps[GYM.di + '-' + i] ? '<button class="btn sm danger" id="gsr" style="margin-bottom:10px">رجّع التمرين الأصلي</button>' : '') + '<div id="gl">' + draw('') + '</div>', function () {
       var bind = function () { $$('[data-pick]').forEach(function (b) { b.onclick = function () { set(+b.getAttribute('data-pick')); }; }); };
       var set = function (id) { if (id) GYM.swaps[GYM.di + '-' + i] = id; else delete GYM.swaps[GYM.di + '-' + i]; G.closeSheet(); gymRender();
         gCheckin(function (d) { d.swaps = d.swaps || {}; if (id) d.swaps[GYM.di + '-' + i] = id; else delete d.swaps[GYM.di + '-' + i]; }).catch(function () { G.toast('ما انحفظ التبديل'); }); };
@@ -545,6 +546,15 @@
       $('#nw').onclick = function () { exForm({}, function () { list(); }); };
     }).catch(fail);
   }
+  /* alternatives group: exercises with the same "pattern" replace each other when a machine is busy */
+  function patOpts(e) {
+    var by = {}; (EX || []).forEach(function (x) { if (x.pattern) (by[x.pattern] = by[x.pattern] || []).push(x); });
+    var keys = Object.keys(by).sort(function (a, b) { var ma = by[a][0].muscle || '', mb = by[b][0].muscle || ''; return ma === mb ? a.localeCompare(b) : ma.localeCompare(mb); });
+    return '<option value="">بدون مجموعة (بيطلعله كل تمارين العضلة)</option>' + keys.map(function (k) {
+      var n = by[k].filter(function (x) { return x.id !== e.id; }).map(function (x) { return x.name_ar; });
+      return '<option value="' + esc(k) + '"' + (e.pattern === k ? ' selected' : '') + '>' + esc((by[k][0].muscle || '') + ': ' + n.slice(0, 3).join('، ') + (n.length > 3 ? ' +' + (n.length - 3) : '')) + '</option>';
+    }).join('') + '<option value="+">+ مجموعة جديدة</option>';
+  }
   function exForm(e, done) {
     var isNew = !e.id, img = { image_male: e.image_male || '', image_female: e.image_female || '' };
     G.sheet('<div class="h2">' + (isNew ? 'تمرين جديد' : 'تعديل التمرين') + '</div><form id="xf">' +
@@ -557,6 +567,7 @@
           '<label class="btn sm block">رفع صورة من الجهاز<input type="file" accept="image/*" data-up="' + g[0] + '" hidden></label>' +
           '<input class="input" style="margin-top:6px" dir="ltr" name="video_' + g[0] + '" placeholder="رابط فيديو الشرح (يوتيوب)" value="' + esc(e['video_' + g[0]] || '') + '"></div>';
       }).join('') + '</div>' +
+      '<label class="field" style="margin-top:10px"><span>مجموعة البدائل (التمارين اللي بتطلع كبديل إذا الجهاز مشغول)</span><select class="input" name="pattern">' + patOpts(e) + '</select></label>' +
       '<label class="field" style="margin-top:10px"><span>نصائح الأداء (بتظهر تحت التمرين، اختياري)</span><textarea class="input" name="tips" rows="2">' + esc(e.tips || '') + '</textarea></label>' +
       '<div class="row"><button class="btn gold">حفظ</button>' + (isNew ? '' : '<button type="button" class="btn danger" style="flex:none" id="xd">حذف</button>') + '</div></form>', function (b) {
       var f = $('#xf', b), pending = {};
@@ -571,7 +582,7 @@
       f.onsubmit = function (ev) {
         ev.preventDefault(); var btn = f.querySelector('button.gold'); btn.disabled = true; btn.textContent = 'عم يحفظ…';
         var row = { name_ar: f.name_ar.value.trim(), name_en: f.name_en.value.trim() || null, muscle: f.muscle.value || null, equipment: f.equipment.value.trim() || null,
-          video_male: f.video_male.value.trim() || null, video_female: f.video_female.value.trim() || null, tips: f.tips.value.trim() || null, updated_at: new Date().toISOString() };
+          video_male: f.video_male.value.trim() || null, video_female: f.video_female.value.trim() || null, tips: f.tips.value.trim() || null, pattern: f.pattern.value === '+' ? 'p' + Date.now().toString(36) : (f.pattern.value || null), updated_at: new Date().toISOString() };
         var first = isNew ? S.rest('coach_exercises', '', { method: 'POST', body: row, headers: { Prefer: 'return=representation' } }).then(function (r) { return r[0]; }) : Promise.resolve(e);
         first.then(function (saved) {
           var ups = Object.keys(pending).map(function (g) {
