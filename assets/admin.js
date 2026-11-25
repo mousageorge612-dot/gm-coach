@@ -9,6 +9,9 @@
   var MUSCLES = ['صدر', 'ظهر', 'أكتاف', 'باي', 'تراي', 'سواعد', 'أرجل', 'أرداف', 'بطن', 'ترابيس', 'سمانة', 'كارديو', 'جسم كامل'];
   var EX = null;            // all exercises [{...}]
   var dirty = false;
+  var NATIVE = window.GMNative || null;   // Android dashboard APK bridge: polls coach_inbox natively
+  function nativeOn() { try { return !!(NATIVE && NATIVE.hasSession && NATIVE.hasSession()); } catch (e) { return false; } }
+  window.GMA = { render: function () { G.toast('الإشعارات تفعّلت ✓'); try { NATIVE.notify('إشعار تجربة ✅', 'إشعارات لوحة التحكم شغالة عالتابلت.'); } catch (e) {} route(); }, fail: function () { G.toast('ما زبط، تأكد من كلمة المرور'); } };
 
   function exById(id) { if (!EX) return null; for (var i = 0; i < EX.length; i++) if (EX[i].id === id) return EX[i]; return null; }
   function loadEx(force) {
@@ -25,7 +28,8 @@
       '<button class="btn gold block">دخول</button>' + (msg ? '<p class="red" style="text-align:center">' + esc(msg) + '</p>' : '') + '</form>';
     $('#lf').onsubmit = function (e) {
       e.preventDefault(); var f = e.target;
-      S.login(f.u.value, f.p.value).then(checkCoach).catch(function (er) { G.toast(G.errText(er)); });
+      var nu = f.u.value, np = f.p.value;
+      S.login(nu, np).then(function () { if (NATIVE && NATIVE.login) try { NATIVE.login(nu, np); } catch (e) {} }).then(checkCoach).catch(function (er) { G.toast(G.errText(er)); });
     };
   }
   function checkCoach() {
@@ -46,6 +50,7 @@
     if (page === 'tpl' && h[1]) return tplEdit(+h[1]);
     if (page === 'tpl') return tplPage();
     if (page === 'inbox') return inboxPage(h[1] || 'me');
+    if (page === 'gym') return gymPage(h[1]);
     return clientsPage();
   }
   window.addEventListener('hashchange', function () {
@@ -55,11 +60,18 @@
   window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
   function shell(active, body) {
     $('#app').innerHTML = '<div class="wrap wide"><div class="top"><div class="brand"><img src="../assets/img/logo.png" alt="GM"><div><b>لوحة التحكم</b><small>GM COACH</small></div></div>' +
-      '<div style="display:flex;gap:6px">' + ('Notification' in window && 'PushManager' in window ? '<button class="btn sm' + (Notification.permission === 'granted' ? ' gold' : ' ghost') + '" id="ntf" title="الإشعارات">🔔 ' + (Notification.permission === 'granted' ? 'مفعّلة' : 'فعّل الإشعارات') + '</button>' : '<button class="btn sm ghost" id="ntf-x">🔔 الإشعارات</button>') +
+      '<div style="display:flex;gap:6px">' + (NATIVE ? '<button class="btn sm' + (nativeOn() ? ' gold' : ' ghost') + '" id="ntf-n">🔔 ' + (nativeOn() ? 'مفعّلة' : 'فعّل الإشعارات') + '</button>' : 'Notification' in window && 'PushManager' in window ? '<button class="btn sm' + (Notification.permission === 'granted' ? ' gold' : ' ghost') + '" id="ntf" title="الإشعارات">🔔 ' + (Notification.permission === 'granted' ? 'مفعّلة' : 'فعّل الإشعارات') + '</button>' : '<button class="btn sm ghost" id="ntf-x">🔔 الإشعارات</button>') +
       '<button class="btn sm ghost" id="lo">خروج</button></div></div><nav class="nav">' +
-      [['clients', 'المشتركين'], ['ex', 'مكتبة التمارين'], ['tpl', 'القوالب'], ['inbox', 'الإشعارات <span class="nbadge" id="nbadge"></span>']].map(function (n) { return '<a href="#' + n[0] + '" class="' + (active === n[0] ? 'on' : '') + '">' + n[1] + '</a>'; }).join('') +
+      [['clients', 'المشتركين'], ['gym', '🏋️ الجيم'], ['ex', 'مكتبة التمارين'], ['tpl', 'القوالب'], ['inbox', 'الإشعارات <span class="nbadge" id="nbadge"></span>']].map(function (n) { return '<a href="#' + n[0] + '" class="' + (active === n[0] ? 'on' : '') + '">' + n[1] + '</a>'; }).join('') +
       '</nav><div id="main">' + body + '</div></div>';
-    $('#lo').onclick = function () { S.clear(); renderLogin(); };
+    $('#lo').onclick = function () { S.clear(); if (NATIVE && NATIVE.logout) try { NATIVE.logout(); } catch (e) {} renderLogin(); };
+    var nn = $('#ntf-n'); if (nn) nn.onclick = function () {
+      if (nativeOn()) { try { NATIVE.requestPermission(); NATIVE.notify('إشعار تجربة ✅', 'إشعارات لوحة التحكم شغالة عالتابلت.'); } catch (e) {} return G.toast('مفعّلة ✓ بيوصلك الملخص الليلي وتنبيهات التجديد (ممكن يتأخر لربع ساعة)'); }
+      G.sheet('<h3 class="h3">فعّل إشعارات التابلت</h3><p class="muted" style="font-size:13.5px">دخّل كلمة مرور حساب المدرب مرة وحدة، فالتطبيق بيفحص إشعاراتك لحاله كل ربع ساعة تقريباً حتى لو كان مسكّر.</p>' +
+        '<form id="nlf"><label class="field"><span>اسم المستخدم</span><input class="input" name="u" dir="ltr" autocapitalize="none" value="coach" required></label><label class="field"><span>كلمة المرور</span><input class="input" name="p" type="password" dir="ltr" required></label><button class="btn gold block">فعّل</button></form>', function () {
+        $('#nlf').onsubmit = function (e) { e.preventDefault(); try { NATIVE.login(e.target.u.value, e.target.p.value); } catch (x) {} G.closeSheet(); G.toast('لحظة...'); };
+      });
+    };
     unread();
     var nx = $('#ntf-x'); if (nx) nx.onclick = function () { G.toast(/iPhone|iPad/.test(navigator.userAgent) ? 'عالآيفون: افتح اللوحة من Safari، كبسة المشاركة ⬆️ ثم «إضافة إلى الشاشة الرئيسية»، وافتحها من الأيقونة الجديدة وكبس هالزر' : 'هالمتصفح ما بيدعم الإشعارات. افتح coach.georgemousa.com/admin من Chrome (مو من تطبيق APK)'); };
     var nb = $('#ntf'); if (nb) nb.onclick = function () {
@@ -83,6 +95,160 @@
   }
   function loading(active) { shell(active, '<div class="spinner"></div>'); }
   function fail(e) { $('#main').innerHTML = '<div class="empty">' + esc(G.errText(e)) + '</div>'; }
+
+  /* ---------- gym mode: George trains a private client on the tablet and logs for them ---------- */
+  var GYM = null, gymTm = null, gymSave = {};
+  function gN(x) { return parseFloat(String(x == null ? '' : x).replace(/[٠-٩]/g, function (d) { return d.charCodeAt(0) - 0x660; }).replace(/[۰-۹]/g, function (d) { return d.charCodeAt(0) - 0x6F0; }).replace(/[٫,]/, '.')) || 0; }
+  function gTimed(it) { return /\d\s*ث|ثاني|ثوان|دقيق|sec|min/i.test(String(it.reps || '')); }
+  function gRest(it) { var s = String(it.rest || ''), m = s.match(/\d+(\.\d+)?/); if (!m) return 90; var v = parseFloat(m[0]); return /د|min/i.test(s) && v < 10 ? Math.round(v * 60) : v; }
+  function gScore(s, timed) { if (!s) return 0; var w = gN(s.w), r = gN(s.r), t = gN(s.t); return timed ? t : w > 0 ? w * (1 + r / 30) : r; }
+  function gSet(s, timed) { if (!s) return ''; return timed ? (s.t ? gN(s.t) + 'ث' : '') : (s.w || s.r ? (gN(s.w) ? gN(s.w) + '×' : '') + (gN(s.r) || '-') : ''); }
+  function gPh(v, d) { return v && gN(v) ? String(gN(v)) : (v || d); }
+  function gDays(P) { return (P && P.data && P.data.days) || []; }
+  function gIdx(P, ck, t) {
+    var ds = gDays(P), d = P && P.data, r = d && d.rotation && d.rotation.start && (d.rotation.weekdays || []).length ? d.rotation : null;
+    var y = ck[G.addDays(t, -1)], c = ck[t] || {};
+    if (y && y.postpone != null && ds[+y.postpone] && !c.useOrig) return +y.postpone;
+    var wd = G.parseD(t).getDay();
+    if (r) { if (t < r.start || r.weekdays.indexOf(wd) < 0) return -1; var n = 0, dd = r.start; for (var k = 0; k < 4000 && dd < t; k++) { if (r.weekdays.indexOf(G.parseD(dd).getDay()) >= 0) n++; dd = G.addDays(dd, 1); } return n % ds.length; }
+    for (var i = 0; i < ds.length; i++) if ((ds[i].weekdays || []).indexOf(wd) >= 0) return i;
+    return -1;
+  }
+  function gymPage(uid) {
+    if (gymTm) { clearInterval(gymTm); gymTm = null; }
+    loading('gym');
+    if (!uid) return gymList();
+    var t = G.today();
+    Promise.all([S.rest('coach_clients', 'select=*&user_id=eq.' + uid), S.rest('coach_programs', 'select=*&kind=eq.training&client_id=eq.' + uid),
+      S.rest('coach_checkins', 'select=day,data&client_id=eq.' + uid + '&day=gte.' + G.addDays(t, -1)),
+      S.rest('coach_logs', 'select=day,exercise_id,sets&client_id=eq.' + uid + '&order=day.desc&limit=800'), loadEx()]).then(function (r) {
+      var c = (r[0] || [])[0]; if (!c) return fail(new Error('المشترك مو موجود'));
+      var ck = {}; (r[2] || []).forEach(function (x) { ck[x.day] = x.data || {}; });
+      var P = (r[1] || [])[0] || null, di = gIdx(P, ck, t);
+      GYM = { c: c, P: P, ck: ck, logs: r[3] || [], di: di, swaps: ((ck[t] || {}).swaps) || {}, done: {} };
+      if (GYM.di < 0 && gDays(P).length) GYM.di = 0, GYM.rest = true;
+      gymRender();
+    }).catch(fail);
+  }
+  function gymList() {
+    var t = G.today();
+    Promise.all([S.rest('coach_clients', 'select=user_id,name,package,active,gender&active=eq.true&order=name.asc'), S.rest('coach_programs', 'select=client_id,data&kind=eq.training&client_id=not.is.null'),
+      S.rest('coach_checkins', 'select=client_id,day,data&day=gte.' + G.addDays(t, -1))]).then(function (r) {
+      var pr = {}, ck = {}; (r[1] || []).forEach(function (p) { pr[p.client_id] = p; });
+      (r[2] || []).forEach(function (x) { (ck[x.client_id] = ck[x.client_id] || {})[x.day] = x.data || {}; });
+      var row = function (c) { var P = pr[c.user_id], i = P ? gIdx(P, ck[c.user_id] || {}, t) : -1, d = gDays(P)[i];
+        return '<a class="cl" href="#gym/' + c.user_id + '"><div><div class="nm">' + esc(c.name) + '</div><div class="sub">' + (!P ? 'ما في خطة تدريب' : d ? 'اليوم: ' + esc(d.title || ('اليوم ' + (i + 1))) : 'اليوم راحة حسب الخطة') + '</div></div><span class="btn sm gold">ابدأ ▶</span></a>'; };
+      var cl = r[0] || [], pv = cl.filter(isPriv), ot = cl.filter(function (c) { return !isPriv(c); });
+      $('#main').innerHTML = '<h2 class="h2">🏋️ وضع الجيم</h2><p class="muted" style="margin-top:-4px">اختار المشترك اللي معك هلق. بتسجّل أوزانه عنه وبتنحفظ بسجلّه وبيشوفها بتطبيقه.</p>' +
+        '<h3 class="h3" style="margin:14px 0 8px">البرايفت</h3><div style="display:grid;gap:8px">' + (pv.length ? pv.map(row).join('') : '<div class="empty">ما في مشتركين برايفت فعّالين.</div>') + '</div>' +
+        (ot.length ? '<details style="margin-top:16px"><summary class="muted" style="cursor:pointer">باقي المشتركين (' + ot.length + ')</summary><div style="display:grid;gap:8px;margin-top:8px">' + ot.map(row).join('') + '</div></details>' : '');
+    }).catch(fail);
+  }
+  function gLast(exId) { var t = G.today(); for (var i = 0; i < GYM.logs.length; i++) { var l = GYM.logs[i]; if (l.exercise_id === exId && l.day < t && (l.sets || []).some(function (s) { return s && (s.w || s.r || s.t); })) return l; } return null; }
+  function gToday(exId) { var t = G.today(); for (var i = 0; i < GYM.logs.length; i++) { var l = GYM.logs[i]; if (l.exercise_id === exId && l.day === t) return l.sets || []; } return []; }
+  function gBest(exId, timed) { var t = G.today(), b = 0; GYM.logs.forEach(function (l) { if (l.exercise_id === exId && l.day < t) (l.sets || []).forEach(function (s) { var v = gScore(s, timed); if (v > b) b = v; }); }); return b; }
+  function gEx(it, i) { var sw = GYM.swaps[GYM.di + '-' + i]; return (sw && exById(+sw)) || exById(it.ex) || { id: it.ex, name_ar: it.name || 'تمرين' }; }
+  function gymRender() {
+    var c = GYM.c, ds = gDays(GYM.P), d = ds[GYM.di], g = c.gender === 'female' ? 'female' : 'male';
+    var h = '<div class="row" style="align-items:center;gap:8px;flex-wrap:wrap"><a class="btn sm ghost" href="#gym">→ المشتركين</a><h2 class="h2" style="margin:0;flex:1">' + esc(c.name) + '</h2><a class="btn sm ghost" href="#client/' + c.user_id + '/training">الخطة</a></div>';
+    if (!ds.length) { $('#main').innerHTML = h + '<div class="empty">ما في خطة تدريب لهالمشترك.</div>'; return; }
+    h += (GYM.rest ? '<p class="muted">اليوم مو يوم تمرين حسب خطته. اختار اليوم اللي بدك ياه:</p>' : '') +
+      '<div class="chips" style="margin-top:10px">' + ds.map(function (x, i) { return '<button class="chip' + (i === GYM.di ? ' on' : '') + '" data-gd="' + i + '">' + esc(x.title || ('اليوم ' + (i + 1))) + '</button>'; }).join('') + '</div>';
+    if (d.notes) h += '<p class="muted" style="font-size:13.5px">' + esc(d.notes) + '</p>';
+    (d.items || []).forEach(function (it, i) {
+      var e = gEx(it, i), timed = gTimed(it), last = gLast(e.id), tod = gToday(e.id), n = Math.max(parseInt(it.sets, 10) || 3, tod.length), img = g === 'female' ? (e.image_female || e.image_male) : (e.image_male || e.image_female);
+      var ls = last ? last.sets.filter(function (s) { return s && (s.w || s.r || s.t); }) : [];
+      h += '<div class="gx" data-gi="' + i + '" data-ex="' + e.id + '" data-timed="' + (timed ? 1 : 0) + '" data-rest="' + gRest(it) + '">' +
+        '<div class="gh">' + (img ? '<img src="' + esc(G.media(img)) + '" alt="" loading="lazy">' : '<div class="gimg0">' + (i + 1) + '</div>') +
+        '<div style="flex:1;min-width:0"><div class="gnm">' + (i + 1) + '. ' + esc(e.name_ar) + (GYM.swaps[GYM.di + '-' + i] ? ' <small class="gold">(بديل)</small>' : '') + '</div>' +
+        '<div class="muted" style="font-size:13px">' + esc((it.sets || '-') + ' × ' + (it.reps || '-')) + ' · راحة ' + esc(it.rest || gRest(it) + 'ث') + (it.note ? ' · ' + esc(it.note) : '') + '</div>' +
+        '<div class="glast">' + (ls.length ? 'آخر مرة (' + esc(last.day.slice(5).replace('-', '/')) + '): <b dir="ltr">' + ls.map(function (s) { return gSet(s, timed); }).join(' · ') + '</b>' : 'أول مرة بهالتمرين') + '</div></div>' +
+        '<button class="btn sm ghost" data-gsw="' + i + '" title="بدّل التمرين">🔄</button></div><div class="gsets">';
+      for (var k = 0; k < n; k++) {
+        var s = tod[k] || {}, p = ls[k] || ls[ls.length - 1] || {}, ok = !!(s.w || s.r || s.t);
+        h += '<div class="gs' + (ok ? ' ok' : '') + '" data-k="' + k + '"><span class="gk">' + (k + 1) + '</span>' +
+          (timed ? '<input class="input" inputmode="decimal" data-f="t" value="' + esc(s.t || '') + '" placeholder="' + esc(gPh(p.t, 'ثواني')) + '"><span class="muted">ث</span>'
+            : '<input class="input" inputmode="decimal" data-f="w" value="' + esc(s.w || '') + '" placeholder="' + esc(gPh(p.w, 'كغ')) + '"><span class="muted">×</span><input class="input" inputmode="numeric" data-f="r" value="' + esc(s.r || '') + '" placeholder="' + esc(gPh(p.r, 'عدّات')) + '">') +
+          '<button class="gok" data-gok aria-label="خلصت الجولة">✓</button></div>';
+      }
+      h += '</div><button class="btn sm ghost" data-gadd style="margin-top:6px">+ جولة</button></div>';
+    });
+    h += '<label class="field" style="margin-top:14px"><span>ملاحظة عن الجلسة (بتنحفظ بملاحظاتك الخاصة عن المشترك)</span><textarea class="input" id="gnote" placeholder="مثلاً: ركبته وجعته بالسكوات، خففنا الوزن"></textarea></label>' +
+      '<button class="btn gold block" id="gend" style="margin-top:10px">✓ خلّصت الجلسة</button><div style="height:90px"></div>' +
+      '<div class="gtm" id="gtm" hidden><b id="gtv">0:00</b><span class="muted" id="gtl"></span><button class="btn sm ghost" id="gt15">+15ث</button><button class="btn sm ghost" id="gtx">✕</button></div>';
+    $('#main').innerHTML = h;
+    $$('[data-gd]').forEach(function (b) { b.onclick = function () { GYM.di = +b.getAttribute('data-gd'); GYM.rest = false; gymRender(); }; });
+    $$('.gx').forEach(function (box) {
+      $$('input', box).forEach(function (inp) { inp.oninput = function () { gQueue(box); }; });
+      $$('[data-gok]', box).forEach(function (b) { b.onclick = function () {
+        var row = b.closest('.gs'); $$('input', row).forEach(function (inp) { if (!inp.value.trim() && inp.placeholder && /\d/.test(inp.placeholder)) inp.value = inp.placeholder; });
+        row.classList.add('ok'); gSaveNow(box); gTimer(+box.getAttribute('data-rest'), $('.gnm', box).textContent);
+        var nx = row.nextElementSibling && $('input', row.nextElementSibling); if (nx) nx.focus({ preventScroll: true });
+      }; });
+      $('[data-gadd]', box).onclick = function () { var sets = $('.gsets', box), last = sets.lastElementChild, cl = last.cloneNode(true), k = sets.children.length; cl.setAttribute('data-k', k); cl.classList.remove('ok'); $('.gk', cl).textContent = k + 1; $$('input', cl).forEach(function (x) { x.value = ''; }); sets.appendChild(cl); gymRender.bindRow(box, cl); };
+      $('[data-gsw]', box).onclick = function () { gSwap(+box.getAttribute('data-gi'), +box.getAttribute('data-ex')); };
+    });
+    $('#gend').onclick = gEnd;
+  }
+  gymRender.bindRow = function (box, row) {
+    $$('input', row).forEach(function (inp) { inp.oninput = function () { gQueue(box); }; });
+    $('[data-gok]', row).onclick = function () { $$('input', row).forEach(function (inp) { if (!inp.value.trim() && inp.placeholder && /\d/.test(inp.placeholder)) inp.value = inp.placeholder; }); row.classList.add('ok'); gSaveNow(box); gTimer(+box.getAttribute('data-rest'), $('.gnm', box).textContent); };
+  };
+  function gQueue(box) { var id = box.getAttribute('data-ex'); clearTimeout(gymSave[id]); gymSave[id] = setTimeout(function () { gSaveNow(box, true); }, 900); }
+  function gSaveNow(box, quiet) {
+    var id = +box.getAttribute('data-ex'), timed = box.getAttribute('data-timed') === '1', t = G.today(); clearTimeout(gymSave[id]);
+    var sets = $$('.gs', box).map(function (row) { var s = {}; $$('input', row).forEach(function (inp) { var v = inp.value.trim(); if (v) s[inp.getAttribute('data-f')] = v; }); return s; });
+    while (sets.length && !Object.keys(sets[sets.length - 1]).length) sets.pop();
+    var prev = gBest(id, timed), now = 0; sets.forEach(function (s) { var v = gScore(s, timed); if (v > now) now = v; });
+    GYM.logs = GYM.logs.filter(function (l) { return !(l.day === t && l.exercise_id === id); }); GYM.logs.unshift({ day: t, exercise_id: id, sets: sets });
+    S.upsert('coach_logs', { client_id: GYM.c.user_id, day: t, exercise_id: id, sets: sets, updated_at: new Date().toISOString() }, 'client_id,day,exercise_id')
+      .then(function () { if (!quiet) G.toast('انحفظ ✓'); }).catch(function () { G.toast('ما انحفظ، تأكد من الإنترنت'); });
+    if (!quiet && prev > 0 && now > prev * 1.001 && !GYM.done[id]) { GYM.done[id] = 1; setTimeout(function () { G.toast('🏆 رقم قياسي جديد لـ ' + GYM.c.name.split(' ')[0] + '!'); }, 900); }
+  }
+  function gTimer(sec, label) {
+    var box = $('#gtm'); if (!box) return; var end = Date.now() + sec * 1000; box.hidden = false; $('#gtl').textContent = 'راحة · ' + label.replace(/^\d+\.\s*/, '');
+    if (gymTm) clearInterval(gymTm);
+    var tick = function () { var l = Math.max(0, Math.round((end - Date.now()) / 1000)); $('#gtv').textContent = Math.floor(l / 60) + ':' + G.pad(l % 60);
+      box.classList.toggle('end', l <= 5);
+      if (!l) { clearInterval(gymTm); gymTm = null; gBeep(); if (navigator.vibrate) try { navigator.vibrate([300, 150, 300]); } catch (e) {} setTimeout(function () { box.hidden = true; }, 3000); } };
+    tick(); gymTm = setInterval(tick, 300);
+    $('#gt15').onclick = function () { end += 15000; if (!gymTm) { box.hidden = false; gymTm = setInterval(tick, 300); } };
+    $('#gtx').onclick = function () { clearInterval(gymTm); gymTm = null; box.hidden = true; };
+  }
+  function gBeep() { try { var A = window.AudioContext || window.webkitAudioContext, a = new A(); [0, .35, .7].forEach(function (d) { var o = a.createOscillator(), g = a.createGain(); o.frequency.value = 880; o.connect(g); g.connect(a.destination); g.gain.setValueAtTime(.25, a.currentTime + d); o.start(a.currentTime + d); o.stop(a.currentTime + d + .2); }); } catch (e) {} }
+  function gCheckin(patch) {
+    var t = G.today(), uid = GYM.c.user_id;
+    return S.rest('coach_checkins', 'select=data&client_id=eq.' + uid + '&day=eq.' + t).then(function (r) {
+      var d = (r && r[0] && r[0].data) || {}; patch(d);
+      return S.upsert('coach_checkins', { client_id: uid, day: t, data: d, updated_at: new Date().toISOString() }, 'client_id,day');
+    });
+  }
+  function gSwap(i, cur) {
+    var e = exById(cur) || {}, list = (EX || []).filter(function (x) { return x.id !== cur; });
+    var draw = function (q) { var L = list.filter(function (x) { return q ? (x.name_ar + ' ' + (x.name_en || '')).toLowerCase().indexOf(q.toLowerCase()) >= 0 : x.muscle === e.muscle; }).slice(0, 40);
+      return L.map(function (x) { return '<button class="btn ghost block" style="text-align:right;margin-bottom:6px" data-pick="' + x.id + '">' + esc(x.name_ar) + ' <small class="muted">' + esc(x.equipment || '') + '</small></button>'; }).join('') || '<div class="empty">ما في نتائج.</div>'; };
+    G.sheet('<h3 class="h3">بدّل «' + esc(e.name_ar || 'التمرين') + '» لليوم بس</h3><p class="muted" style="font-size:13px">مثلاً إذا الجهاز مشغول. الخطة الأصلية ما بتتغيّر، والمشترك بيشوف البديل بتطبيقه اليوم.</p>' +
+      '<input class="input" id="gq" placeholder="دوّر على تمرين تاني..." style="margin-bottom:10px">' + (GYM.swaps[GYM.di + '-' + i] ? '<button class="btn sm danger" id="gsr" style="margin-bottom:10px">رجّع التمرين الأصلي</button>' : '') + '<div id="gl">' + draw('') + '</div>', function () {
+      var bind = function () { $$('[data-pick]').forEach(function (b) { b.onclick = function () { set(+b.getAttribute('data-pick')); }; }); };
+      var set = function (id) { if (id) GYM.swaps[GYM.di + '-' + i] = id; else delete GYM.swaps[GYM.di + '-' + i]; G.closeSheet(); gymRender();
+        gCheckin(function (d) { d.swaps = d.swaps || {}; if (id) d.swaps[GYM.di + '-' + i] = id; else delete d.swaps[GYM.di + '-' + i]; }).catch(function () { G.toast('ما انحفظ التبديل'); }); };
+      $('#gq').oninput = function () { $('#gl').innerHTML = draw($('#gq').value.trim()); bind(); };
+      var r = $('#gsr'); if (r) r.onclick = function () { set(0); };
+      bind();
+    });
+  }
+  function gEnd() {
+    $$('.gx').forEach(function (box) { if ($$('input', box).some(function (x) { return x.value.trim(); })) gSaveNow(box, true); });
+    var note = $('#gnote').value.trim(), uid = GYM.c.user_id, t = G.today(), sets = 0, exs = 0;
+    GYM.logs.forEach(function (l) { if (l.day === t) { var n = (l.sets || []).filter(function (s) { return s && (s.w || s.r || s.t); }).length; if (n) { exs++; sets += n; } } });
+    var b = $('#gend'); b.disabled = true;
+    var jobs = [gCheckin(function (d) { d.train = 'yes'; d.gym = { by: 'coach', day: GYM.di }; })];
+    if (note) jobs.push(S.rest('coach_private_notes', 'select=note&client_id=eq.' + uid).then(function (r) {
+      var old = (r && r[0] && r[0].note) || ''; return S.upsert('coach_private_notes', { client_id: uid, note: '🏋️ ' + t + ': ' + note + (old ? '\n' + old : ''), updated_at: new Date().toISOString() }, 'client_id');
+    }));
+    Promise.all(jobs).then(function () { if (gymTm) clearInterval(gymTm); gymTm = null; G.toast('انحفظت الجلسة ✓ ' + exs + ' تمارين، ' + sets + ' جولة'); location.hash = '#gym'; })
+      .catch(function (e) { b.disabled = false; G.toast(G.errText(e)); });
+  }
 
   /* ---------- clients list ---------- */
   function score(c) {
