@@ -579,21 +579,30 @@
   }
   function swapSheet(key) {
     var p = key.split('-'), di = +p[0], i = +p[1], it = days()[di].items[i], orig = D.ex[it.ex] || {}, c = todayC(), cur = c.swaps && c.swaps[key];
-    G.sheet('<div class="h2">بديل لـ ' + esc(orig.name_ar || 'التمرين') + '</div><p class="muted" style="font-size:13px;margin:0 0 10px">نفس العضلة. البديل لليوم بس، وبكرا بترجع الخطة متل ما هي.</p>' +
+    G.sheet('<div class="h2">بديل لـ ' + esc(orig.name_ar || 'التمرين') + '</div><p class="muted" style="font-size:13px;margin:0 0 10px">بدائل بنفس الحركة. البديل لليوم بس، وبكرا بترجع الخطة متل ما هي.</p>' +
       (cur ? '<button class="btn block" id="sw-reset" style="margin-bottom:10px">↩ رجّع التمرين الأصلي</button>' : '') + '<div id="sw-list"><div class="spinner"></div></div>', function (b) {
       var rs = $('#sw-reset', b); if (rs) rs.onclick = function () { delete c.swaps[key]; saveCheckin(G.today(), true); G.closeSheet(); render(); };
-      if (!orig.muscle) { $('#sw-list', b).innerHTML = '<div class="muted">ما في معلومات عن عضلة هالتمرين.</div>'; return; }
-      S.rest('coach_exercises', 'select=*&muscle=eq.' + encodeURIComponent(orig.muscle) + '&id=neq.' + orig.id + '&order=name_ar&limit=40').then(function (rows) {
-        var f = D.me.gender === 'female';
-        rows = (rows || []).filter(function (e) { return f ? (e.image_female || e.image_male) : (e.image_male || e.image_female); });
-        $('#sw-list', b).innerHTML = rows.length ? rows.map(function (e) {
-          return '<button class="swi" data-to="' + e.id + '"><img loading="lazy" src="' + esc(exImg(e)) + '" alt=""><span><b>' + esc(e.name_ar) + '</b><small>' + esc(e.equipment || '') + '</small></span></button>';
-        }).join('') : '<div class="muted">ما لقينا بدائل لهالعضلة.</div>';
-        $$('[data-to]', b).forEach(function (x) { x.onclick = function () {
-          var e = rows.filter(function (r) { return String(r.id) === x.getAttribute('data-to'); })[0]; D.ex[e.id] = e;
-          c.swaps = c.swaps || {}; c.swaps[key] = e.id; saveCheckin(G.today(), true); G.closeSheet(); render(); G.toast('تبدّل لليوم ✓');
-        }; });
-      }).catch(function () { $('#sw-list', b).innerHTML = '<div class="muted">ما قدرنا نجيب البدائل، تأكد من الإنترنت.</div>'; });
+      if (!orig.muscle && !orig.pattern) { $('#sw-list', b).innerHTML = '<div class="muted">ما في معلومات عن عضلة هالتمرين.</div>'; return; }
+      /* same movement first (e.g. barbell bench -> dumbbell / machine press); the rest of the muscle only on demand */
+      var load = function (all) {
+        var q = !all && orig.pattern ? 'pattern=eq.' + encodeURIComponent(orig.pattern) : 'muscle=eq.' + encodeURIComponent(orig.muscle || '');
+        $('#sw-list', b).innerHTML = '<div class="spinner"></div>';
+        S.rest('coach_exercises', 'select=*&' + q + '&id=neq.' + orig.id + '&order=name_ar&limit=60').then(function (rows) {
+          var f = D.me.gender === 'female';
+          rows = (rows || []).filter(function (e) { return f ? (e.image_female || e.image_male) : (e.image_male || e.image_female); });
+          if (!all && !rows.length && orig.muscle) return load(true);
+          $('#sw-list', b).innerHTML = (all && orig.pattern ? '<p class="muted" style="font-size:12.5px;margin:0 0 8px">كل تمارين العضلة. الأفضل تختار شي قريب من حركة التمرين الأصلي.</p>' : '') + (rows.length ? rows.map(function (e) {
+            return '<button class="swi" data-to="' + e.id + '"><img loading="lazy" src="' + esc(exImg(e)) + '" alt=""><span><b>' + esc(e.name_ar) + '</b><small>' + esc(e.equipment || '') + '</small></span></button>';
+          }).join('') : '<div class="muted">ما لقينا بدائل لهالتمرين.</div>') +
+            (!all && orig.pattern && orig.muscle ? '<button class="btn ghost block" id="sw-all" style="margin-top:8px">ما في شي فاضي منهن؟ شوف كل تمارين العضلة</button>' : '');
+          var al = $('#sw-all', b); if (al) al.onclick = function () { load(true); };
+          $$('[data-to]', b).forEach(function (x) { x.onclick = function () {
+            var e = rows.filter(function (r) { return String(r.id) === x.getAttribute('data-to'); })[0]; D.ex[e.id] = e;
+            c.swaps = c.swaps || {}; c.swaps[key] = e.id; saveCheckin(G.today(), true); G.closeSheet(); render(); G.toast('تبدّل لليوم ✓');
+          }; });
+        }).catch(function () { $('#sw-list', b).innerHTML = '<div class="muted">ما قدرنا نجيب البدائل، تأكد من الإنترنت.</div>'; });
+      };
+      load(false);
     });
   }
 
